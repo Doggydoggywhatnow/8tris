@@ -8,12 +8,12 @@ You open it to a black board and plain gray blocks. Everything else is opt-in: a
 
 ## Download
 
-Latest version: **0.7.0**. Download the file for your system from the [`downloads`](downloads) folder (click the file, then the download button).
+Latest version: **0.7.1**. Download the file for your system from the [`downloads`](downloads) folder (click the file, then the download button).
 
 | Platform | File | Notes |
 |---|---|---|
-| Linux (x86_64) | [`8tris-0.7.0-x86_64.AppImage`](downloads/8tris-0.7.0-x86_64.AppImage) | `chmod +x` it and run. Needs glibc 2.38 or newer. |
-| Windows (x86_64) | [`8tris-0.7.0.exe`](downloads/8tris-0.7.0.exe) | Not code-signed, so SmartScreen may warn. Choose "More info", then "Run anyway". |
+| Linux (x86_64) | [`8tris-0.7.1-x86_64.AppImage`](downloads/8tris-0.7.1-x86_64.AppImage) | `chmod +x` it and run. Needs glibc 2.38 or newer. |
+| Windows (x86_64) | [`8tris-0.7.1.exe`](downloads/8tris-0.7.1.exe) | Not code-signed, so SmartScreen may warn. Choose "More info", then "Run anyway". |
 
 See the [changelog](CHANGELOG.md) for what changed in each version.
 

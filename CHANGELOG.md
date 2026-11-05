@@ -2,6 +2,10 @@
 
 Versions are `major.minor.patch`. Until about ten changes have built up, new features are shipped as patch releases, so a patch number here can include features. This file is the real record of what changed.
 
+## 0.7.1
+- **Privacy fix:** dates in History (and the name of an exported history file) no longer use the device's timezone. They are shown in UTC plus the offset you type in, the same offset the real-time clock uses (default: UTC). Set it in Preferences, History or under Theming, Real-time clock. 8tris now never reads the device's timezone or location anywhere.
+- Added `test/tz.c`, which checks that dates come out identical whatever timezone the device is set to.
+
 ## 0.7.0
 - **Music from your own files.** Preferences, Sound: put .mp3, .ogg, .wav or .flac files (up to 10 minutes each) in the music folder, then play one track on repeat, all in order, or shuffled, with its own volume. Files are decoded locally and never copied or sent anywhere.
 - **Now playing on screen** (optional): title, artist and album, plus album art, read from ID3v2 and ID3v1 (mp3), Vorbis comments and pictures (flac, ogg) and LIST INFO (wav); falls back to the file name. Position, size, opacity, font and bold are adjustable.
