@@ -1,6 +1,6 @@
 # 8tris
 
-A minimal, endlessly customizable Tetris. One small native program (about 2 MB), no browser engine inside.
+A minimal, endlessly customizable Tetris. One small native program (less than 5 MB), no browser engine inside.
 
 You open it to a black board and plain gray blocks. Everything else is opt-in: any board size, pieces from 1 to 10 blocks or letters, themes, effects, sounds, fonts, your own keys and your own pace.
 
