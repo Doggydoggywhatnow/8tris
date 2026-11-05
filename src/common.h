@@ -19,7 +19,7 @@ static inline int imax(int a,int b){return a>b?a:b;}
 static inline int iclamp(int v,int lo,int hi){return v<lo?lo:v>hi?hi:v;}
 static inline double dmin(double a,double b){return a<b?a:b;}
 static inline double dmax(double a,double b){return a>b?a:b;}
-static inline double dclamp(double v,double lo,double hi){return v<lo?lo:v>hi?hi:v;}
+static inline double dclamp(double v,double lo,double hi){return v!=v?lo:v<lo?lo:v>hi?hi:v;}
 
 static u32 rs_=0x9E3779B9u;
 static inline u32 rnd32(void){rs_^=rs_<<13;rs_^=rs_>>17;rs_^=rs_<<5;return rs_;}

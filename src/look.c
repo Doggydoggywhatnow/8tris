@@ -19,7 +19,7 @@ static int LT(int c){return T(c)==TH_LIGHT;}                  // 8tris Light: th
 static int LG(int c){return T(c)==TH_GRAPHITE;}               // Graphite: 8tris with light grey pieces on a white board
 static int pale(int c){return LT(c)||LG(c);}                    // the component is drawn on a white/pale background
 static int snd_theme(void){int t=T(C_SOUND);return(t==TH_LIGHT||t==TH_GRAPHITE)?TH_MIN:t;}   // 8tris Light has no voice of its own, it uses the 8tris one
-static const char* theme_label(int comp,int t){if(comp==C_SOUND&&t==TH_CLASSIC)return "Classic chiptune";return THEME_NAME[t];}
+static const char* theme_label(int comp,int t){if(comp==C_SOUND&&t==TH_CLASSIC)return "Classic chiptune";return (t>=0&&t<N_THEMES)?THEME_NAME[t]:"?";}
 static double tm(double now){return calm?0:now;}
 
 // Layout (set each frame by app_frame)

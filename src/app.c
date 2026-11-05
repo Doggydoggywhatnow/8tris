@@ -30,9 +30,9 @@ static void wild_page(double now){
     u32 c=RGB((((a>>16)&255)+((b>>16)&255))/2,(((a>>8)&255)+((b>>8)&255))/2,((a&255)+(b&255))/2);
     int x0=bx*4,y0=by*4;for(j=0;j<4&&y0+j<WH;j++)for(i=0;i<4&&x0+i<WW;i++)FB[(y0+j)*FW+x0+i]=c;}
 }
-// ---- Side strip: held pieces, next pieces and the Settings button ----
+// ---- Side strip: held pieces, next pieces and the Preferences button ----
 static int stripX(void){return WW-80;}
-static void strip_button_rect(int*x,int*y,int*w,int*h){*x=stripX()+6;*w=68;*h=30;*y=WH-8-30;}
+static void strip_button_rect(int*x,int*y,int*w,int*h){*x=stripX()+3;*w=74;*h=30;*y=WH-8-30;}
 static void draw_strip(double now){
   int sx=stripX(),i;
   if(T(C_PANEL)==TH_SWIRL){swirl_fill(1,sx,0,80,WH,6,tm(now)+4000,.32,50);
@@ -53,7 +53,7 @@ static void draw_strip(double now){
   int bx,by,bw,bh;strip_button_rect(&bx,&by,&bw,&bh);int hot=!menu&&mx>=bx&&mx<bx+bw&&my>=by&&my<by+bh;
   u32 bc=T(C_PANEL)==TH_SWIRL?sw_col(.15+tm(now)*.00005):T(C_PANEL)==TH_WILD?HEX(0xffee00):LG(C_PANEL)?HEX(0x5a5a5a):LT(C_PANEL)?HEX(0):HEX(0xe0e0e0);
   u32 bk=pale(C_PANEL)?HEX(0xffffff):HEX(0);
-  fill_rect(bx,by,bw,bh,hot?bc:bk,1);border_in(bx,by,bw,bh,1,bc,1);text_center(0,14,bx+bw/2.0,by+20,hot?bk:(T(C_PANEL)==TH_SWIRL?HEX(0xffffff):bc),1,"Settings");
+  fill_rect(bx,by,bw,bh,hot?bc:bk,1);border_in(bx,by,bw,bh,1,bc,1);text_center(0,11,bx+bw/2.0,by+19,hot?bk:(T(C_PANEL)==TH_SWIRL?HEX(0xffffff):bc),1,"Preferences");
 }
 
 // ---- Entry points ----

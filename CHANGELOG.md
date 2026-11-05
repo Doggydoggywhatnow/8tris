@@ -2,6 +2,13 @@
 
 Versions are `major.minor.patch`. Until about ten changes have built up, new features are shipped as patch releases, so a patch number here can include features. This file is the real record of what changed.
 
+## 0.6.6
+- The **Settings** button in the side panel now reads **Preferences** (slightly wider button, smaller text so it fits).
+- Bug hunt: ran the game under memory and undefined-behaviour checkers with randomised settings files, damaged history files, random window sizes and thousands of random key and mouse events, plus 300 random games checking the rules. No crashes found.
+- Fixed: a damaged history file with an out-of-range theme number could read past the theme list when shown in History.
+- Fixed: a non-numeric value such as `nan` in a hand-edited settings file could stall the fall speed.
+- Added fuzz, rules-invariant and settings round-trip tests to `test/`.
+
 ## 0.6.5
 - Theme **Classic colors** is now just **Classic**, and **Solid color** is now **Solid Color**.
 - Themes are listed in a new order everywhere: 8tris, 8tris Light, Graphite, Classic, Solid Color, Swirl, Wild. Saved settings are unaffected.
