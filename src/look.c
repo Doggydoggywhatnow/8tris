@@ -2,15 +2,15 @@
 // Theming: every visual part is its own component and each component can use any theme that defines it.
 enum{C_PAGE,C_PANEL,C_MENU,C_FRAME,C_BOARD,C_GRID,C_PIECES,C_GHOST,C_EFFECTS,C_SOUND,N_COMPS};
 enum{TH_MIN,TH_CLASSIC,TH_WILD,TH_SWIRL,TH_SOLID,TH_LIGHT,TH_GRAPHITE,N_THEMES};
-static const char*COMP_NAME[N_COMPS]={"Page background","Side panel","Settings menu","Board frame","Board background","Grid lines","Pieces","Landing outline","Effect colors","Sound voice"};
+static const char*COMP_NAME[N_COMPS]={"Page background","Side panel","Preferences menu","Board frame","Board background","Grid lines","Pieces","Landing outline","Effect colors","Sound voice"};
 static const char*THEME_NAME[N_THEMES]={"8tris","Classic","Wild","Swirl","Solid Color","8tris Light","Graphite"};
-// The order themes are listed in the menus. Theme numbers never change (they are saved in settings and pick sound voices), only this list does.
+// The order themes are listed in the menus. Theme numbers never change (they are saved in preferences and pick sound voices), only this list does.
 static const int THEME_ORDER[N_THEMES]={TH_MIN,TH_LIGHT,TH_GRAPHITE,TH_CLASSIC,TH_SOLID,TH_SWIRL,TH_WILD};
 // Which themes define each component (bit 0 = 8tris, bit 1 = Classic, bit 2 = Wild, bit 3 = Swirl, bit 4 = Solid Color, bit 5 = 8tris Light, bit 6 = Graphite). Add a theme to a component by setting its bit.
 static const int AVAIL[N_COMPS]={109,109,109,109,109,109,127,125,111,111};   // Graphite (bit 6) is available for every component
 // Solid Color theme: one hex color for the pieces and one for the landing outline. They stay equal unless solidSep is on.
 static u32 solidP=0xFF4F9DFFu,solidG=0xFF4F9DFFu;static int solidSep=0;
-// Appearance (settings menu only, plus the landing outline strength): font family, bold, italic, text size in pt, high contrast, menu width, line spacing.
+// Appearance (preferences menu only, plus the landing outline strength): font family, bold, italic, text size in pt, high contrast, menu width, line spacing.
 static int uiFam=0,uiBold=0,uiItal=0,uiPt=14,hiCon=0,mwSel=0,lsSel=0,ghostStr=50;
 static u32 ghost_solid(void){return solidSep?solidG:solidP;}
 static int themeOn=0,TC[N_COMPS];static int calm=0;      // calm = reduce motion (freezes animation, softer effects, effects capped at Moderate)

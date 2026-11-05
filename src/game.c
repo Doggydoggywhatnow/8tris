@@ -90,7 +90,7 @@ static u8*board=NULL;static Piece p;static Def**queue_=NULL;static Def*holds[10]
 static double score=0;static int lines=0,level=1,over=0,paused=0,menu=0;static double acc=0,last_t=0;
 static int dir=0,hl=0,hr=0,sd=0;static double mt=0,st=0,lockT=0;static int resets=0,low=0,b2b=0;
 static double fallV=22;   // fall rate position: rate = 0.2 * 100^(fallV/100) rows/s; the slider covers 0..100, a typed rate may lie outside
-static int lvlSys=1,sdRate=22,ovPlayed=0,quiet=0,clearOn=1,cellsCleared=0,pieces=0,maxCombo=0,runDirty=0,saved=0;static double playMs=0,vol_=0.5;
+static int lvlSys=0,sdRate=22,ovPlayed=0,quiet=0,clearOn=1,cellsCleared=0,pieces=0,maxCombo=0,runDirty=0,saved=0;static double playMs=0,vol_=0.5;
 static int usable[12],nusable=0;static Def**lists[12];static int nlists[12];static Def**bags[12];static int nbag[12],bagpos[12];
 static int combo=0;                       // current combo count (lives here because lock() uses it; effects only read it)
 #define QMAX 16

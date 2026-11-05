@@ -1,4 +1,13 @@
 // ===== KEY BINDINGS, SCORE HISTORY AND SAVED SETTINGS =====
+// The optional play timer (CLK[0]) and real-time clock (CLK[1]), set up in the Theming tab: on, place (0-5 corners/edges, 6 side panel), size pt, opacity %, font family, bold.
+typedef struct{int on,pos,sz,op,fam,bold;}Clk;
+static Clk CLK[2]={{0,2,28,80,0,0},{0,0,28,80,0,0}};
+static Clk NP={0,3,16,85,0,0};static int npArt=1,npArtSz=72,npArtist=1;   // "now playing" text on screen: same style options as the clocks, plus artist/album line and album art
+static int clkTzH=0,clkTzM=0,clkDst=0,clk24=1,clkSecs=0,stackV=1,stackFirst=0;   // clock: UTC offset typed by the user (hours, minutes), daylight saving +1h, 24-hour, seconds; stacking of the two when they share a place
+// Filters over the whole game picture (not the menu): brightness -50..50, contrast %, saturation %, hue degrees, color split px, tint strength %, opacity %, invert, tint color.
+static int fltBri=0,fltCon=100,fltSat=100,fltHue=0,fltSplit=0,fltTint=0,fltOp=100,fltInv=0;static u32 fltTintC=0xFFFF9A3Cu;
+static int boardPX=50,boardPY=50;   // where the board sits in the play area: 0 = left/top, 50 = centered, 100 = right/bottom
+static int prefBtn=6;   // where the Preferences button sits: 0-5 corners and edges of the play area, 6 = bottom of the side panel (default)
 static int resSet=0,fpsSet=0,showFps=0,fullscreen=0;   // display settings: render resolution choice, refresh-rate choice, frame-rate counter, full screen
 static const char*ACT_NAME[N_ACTS]={"Move left","Move right","Soft drop","Hard drop","Rotate clockwise","Rotate counterclockwise","Hold","Retrieve held","Cycle held","Pause","Restart"};
 static const int ACT_DEF[N_ACTS][2]={{'a',K_LEFT},{'d',K_RIGHT},{'s',K_DOWN},{' ',0},{'j',K_UP},{'k','z'},{'l',0},{'e',0},{'q',0},{'p',0},{'r',0}};
@@ -86,13 +95,16 @@ static const char* export_history(void){
 static void save_settings(void){
   FILE*f=fopen(get_pref_path("settings.txt"),"w");if(!f)return;int i;
   fprintf(f,"grid=%d,%d\nslots=%d\nfall=%g\nlvl=%d\nclear=%d\nsd=%d\nvol=%d\nthemeOn=%d\ncalm=%d\nfxm=%d\nadv=%d,%d,%d,%d\nsolid=%06x,%06x,%d\nui=%d,%d,%d,%d,%d,%d,%d,%d\n",W,H,slots,fallV,lvlSys,clearOn,sdRate,(int)floor(snd_vol*100+.5),themeOn,calm,fxMaster,ADV[0],ADV[1],ADV[2],ADV[3],(unsigned)(solidP&0xFFFFFF),(unsigned)(solidG&0xFFFFFF),solidSep,uiFam,uiBold,uiItal,uiPt,hiCon,mwSel,lsSel,ghostStr);
-  fprintf(f,"res=%d\nfps=%d\nshowfps=%d\n",resSet,fpsSet,showFps);
+  fprintf(f,"res=%d\nfps=%d\nshowfps=%d\nnowplay=%d,%d,%d,%d,%d,%d,%d,%d,%d\nmusic=%d,%d\nmusicfile=%s\nnext=%d\nprefbtn=%d\nboardpos=%d,%d\ntimer=%d,%d,%d,%d,%d,%d\nclock=%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\nstack=%d,%d\nfilters=%d,%d,%d,%d,%d,%d,%d,%d,%06x\n",resSet,fpsSet,showFps,NP.on,NP.pos,NP.sz,NP.op,NP.fam,NP.bold,npArt,npArtSz,npArtist,musMode,musVol,musFile,NQ,prefBtn,boardPX,boardPY,
+    CLK[0].on,CLK[0].pos,CLK[0].sz,CLK[0].op,CLK[0].fam,CLK[0].bold,CLK[1].on,CLK[1].pos,CLK[1].sz,CLK[1].op,CLK[1].fam,CLK[1].bold,clkTzH,clkTzM,clkDst,clk24,clkSecs,stackV,stackFirst,
+    fltBri,fltCon,fltSat,fltHue,fltSplit,fltTint,fltOp,fltInv,(unsigned)(fltTintC&0xFFFFFF));
   fprintf(f,"weights=");for(i=1;i<=11;i++)fprintf(f,"%d%s",weights[i],i<11?",":"\n");
   fprintf(f,"tw=");for(i=0;i<7;i++)fprintf(f,"%d%s",tw[i],i<6?",":"\n");
   fprintf(f,"theme=");for(i=0;i<N_COMPS;i++)fprintf(f,"%d%s",TC[i],i<N_COMPS-1?",":"\n");
   fprintf(f,"binds=");for(i=0;i<N_ACTS*2;i++)fprintf(f,"%d%s",binds[i/2][i%2],i<N_ACTS*2-1?",":"\n");
   fclose(f);
 }
+static void clk_set(int i,const int*v){CLK[i].on=v[0]?1:0;CLK[i].pos=iclamp(v[1],0,6);CLK[i].sz=iclamp(v[2],12,120);CLK[i].op=iclamp(v[3],10,100);CLK[i].fam=iclamp(v[4],0,6);CLK[i].bold=v[5]?1:0;}
 static int parse_ints(const char*s,int*out,int n){int i=0;while(*s&&i<n){out[i++]=atoi(s);while(*s&&*s!=',')s++;if(*s==',')s++;}return i;}
 static void load_settings(void){
   FILE*f=fopen(get_pref_path("settings.txt"),"r");if(!f)return;char line[400];int v[40],i,n;
@@ -114,6 +126,16 @@ static void load_settings(void){
     else if(!strcmp(k,"res"))resSet=iclamp(atoi(val),0,6);
     else if(!strcmp(k,"fps"))fpsSet=iclamp(atoi(val),0,9);
     else if(!strcmp(k,"showfps"))showFps=atoi(val)!=0;
+    else if(!strcmp(k,"boardpos")){if(parse_ints(val,v,2)==2){boardPX=iclamp(v[0],0,100);boardPY=iclamp(v[1],0,100);}}
+    else if(!strcmp(k,"nowplay")){if(parse_ints(val,v,9)==9){NP.on=v[0]?1:0;NP.pos=iclamp(v[1],0,5);NP.sz=iclamp(v[2],10,48);NP.op=iclamp(v[3],10,100);NP.fam=iclamp(v[4],0,6);NP.bold=v[5]?1:0;npArt=v[6]?1:0;npArtSz=iclamp(v[7],32,256);npArtist=v[8]?1:0;}}
+    else if(!strcmp(k,"music")){if(parse_ints(val,v,2)==2){musMode=iclamp(v[0],0,3);musVol=iclamp(v[1],0,100);}}
+    else if(!strcmp(k,"musicfile")){size_t L_=strlen(val);while(L_&&(val[L_-1]=='\n'||val[L_-1]=='\r'))L_--;if(L_<sizeof musFile&&!memchr(val,'/',L_)&&!memchr(val,'\\',L_)){memcpy(musFile,val,L_);musFile[L_]=0;}}
+    else if(!strcmp(k,"next"))NQ=iclamp(atoi(val),0,10);
+    else if(!strcmp(k,"prefbtn"))prefBtn=iclamp(atoi(val),0,6);
+    else if(!strcmp(k,"timer")){if(parse_ints(val,v,6)==6)clk_set(0,v);}
+    else if(!strcmp(k,"clock")){if(parse_ints(val,v,11)==11){clk_set(1,v);clkTzH=iclamp(v[6],-12,14);clkTzM=iclamp(v[7],0,3)*0+((v[7]==15||v[7]==30||v[7]==45)?v[7]:0);clkDst=v[8]?1:0;clk24=v[9]?1:0;clkSecs=v[10]?1:0;}}
+    else if(!strcmp(k,"stack")){if(parse_ints(val,v,2)==2){stackV=v[0]?1:0;stackFirst=v[1]?1:0;}}
+    else if(!strcmp(k,"filters")){int q[8];unsigned tc;if(sscanf(val,"%d,%d,%d,%d,%d,%d,%d,%d,%x",&q[0],&q[1],&q[2],&q[3],&q[4],&q[5],&q[6],&q[7],&tc)==9){fltBri=iclamp(q[0],-50,50);fltCon=iclamp(q[1],50,150);fltSat=iclamp(q[2],0,200);fltHue=iclamp(q[3],0,359);fltSplit=iclamp(q[4],0,12);fltTint=iclamp(q[5],0,100);fltOp=iclamp(q[6],10,100);fltInv=q[7]?1:0;fltTintC=0xFF000000u|(tc&0xFFFFFF);}}
     else if(!strcmp(k,"weights")){if(parse_ints(val,v,11)==11)for(i=0;i<11;i++)weights[i+1]=iclamp(v[i],0,10);}
     else if(!strcmp(k,"tw")){if(parse_ints(val,v,7)==7)for(i=0;i<7;i++)tw[i]=iclamp(v[i],0,10);}
     else if(!strcmp(k,"theme")){n=parse_ints(val,v,N_COMPS);for(i=0;i<n;i++)if(v[i]>=0&&v[i]<N_THEMES&&(AVAIL[i]>>v[i]&1))TC[i]=v[i];}

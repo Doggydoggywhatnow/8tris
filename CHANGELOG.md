@@ -2,6 +2,18 @@
 
 Versions are `major.minor.patch`. Until about ten changes have built up, new features are shipped as patch releases, so a patch number here can include features. This file is the real record of what changed.
 
+## 0.7.0
+- **Music from your own files.** Preferences, Sound: put .mp3, .ogg, .wav or .flac files (up to 10 minutes each) in the music folder, then play one track on repeat, all in order, or shuffled, with its own volume. Files are decoded locally and never copied or sent anywhere.
+- **Now playing on screen** (optional): title, artist and album, plus album art, read from ID3v2 and ID3v1 (mp3), Vorbis comments and pictures (flac, ogg) and LIST INFO (wav); falls back to the file name. Position, size, opacity, font and bold are adjustable.
+- **Filters** in Theming: brightness, contrast, saturation, hue shift, color split, tint (any color), picture opacity and invert. They apply over any theme, not to the menu.
+- **Game timer and real-time clock** in Theming, each with position, size, opacity, font and bold. The clock uses a UTC offset you type in (plus a daylight saving switch, 12 or 24 hour, optional seconds). The two can stack side by side or one above the other.
+- **Board position:** slide the board anywhere in the play area (Display).
+- **Preferences button** can be moved (Display), and every "Settings" in the interface now reads "Preferences". Its label was changed in 0.6.6.
+- **Next pieces shown:** choose 0 to 10 upcoming pieces (Game).
+- **Default first impression is now minimal:** slow fall rate, level system off, 10 x 20 board, the 8tris theme, effects and audio at "A bit". Saved preferences from older versions are kept as they were.
+- Numbers in the menu fields now accept a minus sign where negative values make sense.
+- Third-party code added: dr_mp3, dr_flac, dr_wav, stb_vorbis and stb_image (public domain or MIT-0).
+
 ## 0.6.7
 - History now shows the length of each game right in the list, next to the date (it was only visible after opening an entry). Games over an hour show as h:mm:ss. Paused time is not counted.
 

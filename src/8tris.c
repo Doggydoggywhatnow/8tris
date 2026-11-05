@@ -3,6 +3,7 @@
 #include "common.h"
 #include "gfx.c"     // software renderer and text
 #include "audio.c"   // sound synthesis
+#include "music.c"   // playing music files from the user's music folder
 #include "game.c"    // rules: pieces, bags, movement, scoring
 #include "swirl.c"   // the Swirl theme's drawing helpers
 #include "look.c"    // themes, board drawing, combo / perfect clear effects

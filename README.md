@@ -8,16 +8,16 @@ You open it to a black board and plain gray blocks. Everything else is opt-in: a
 
 ## Download
 
-Latest version: **0.6.7**. Download the file for your system from the [`downloads`](downloads) folder (click the file, then the download button).
+Latest version: **0.7.0**. Download the file for your system from the [`downloads`](downloads) folder (click the file, then the download button).
 
 | Platform | File | Notes |
 |---|---|---|
-| Linux (x86_64) | [`8tris-0.6.7-x86_64.AppImage`](downloads/8tris-0.6.7-x86_64.AppImage) | `chmod +x` it and run. Needs glibc 2.38 or newer. |
-| Windows (x86_64) | [`8tris-0.6.7.exe`](downloads/8tris-0.6.7.exe) | Not code-signed, so SmartScreen may warn. Choose "More info", then "Run anyway". |
+| Linux (x86_64) | [`8tris-0.7.0-x86_64.AppImage`](downloads/8tris-0.7.0-x86_64.AppImage) | `chmod +x` it and run. Needs glibc 2.38 or newer. |
+| Windows (x86_64) | [`8tris-0.7.0.exe`](downloads/8tris-0.7.0.exe) | Not code-signed, so SmartScreen may warn. Choose "More info", then "Run anyway". |
 
 See the [changelog](CHANGELOG.md) for what changed in each version.
 
-Settings and score history are saved in a folder on your computer and are never sent anywhere.
+Preferences and score history are saved in a folder on your computer and are never sent anywhere.
 
 ## Philosophy
 
@@ -27,16 +27,20 @@ Settings and score history are saved in a folder on your computer and are never 
 - **Open ended.** Any board size from 4 to 500, pieces of 1 to 10 blocks or letters A to Z, up to 10 hold slots, your own keys, your own fall rate. Presets are starting points, not rules.
 - **Modern by default.** Where it can, 8tris plays like current Tetris (SRS rotation, 7-bag, hold, ghost piece, back-to-back, T-spins, perfect clears). Where it does not, the About screen lists exactly how it differs.
 - **Honest scores.** Scoring adjusts for board width and piece size, and the history records every setting, so runs can be compared fairly.
-- **Yours alone.** Settings and history stay on your computer. It is a plain native program with no browser, no network access and no telemetry.
+- **Yours alone.** Preferences and history stay on your computer. It is a plain native program with no browser, no network access and no telemetry.
 
 ## Features
 
-- **Themes, mixed per part.** The page, side panel, settings menu, board frame, board, grid, pieces, landing outline, effects and sound each take their own theme: 8tris, 8tris Light, Graphite, Classic, Solid Color (any hex color, with a full color picker), Swirl and Wild.
+- **Themes, mixed per part.** The page, side panel, preferences menu, board frame, board, grid, pieces, landing outline, effects and sound each take their own theme: 8tris, 8tris Light, Graphite, Classic, Solid Color (any hex color, with a full color picker), Swirl and Wild.
 - **Sound.** A table-driven synth with a different voice per theme, combo and perfect-clear sounds that climb with your combo.
+- **Your own music.** Drop .mp3, .ogg, .wav or .flac files in the music folder (shown in Preferences, Sound) and play one track, all in order, or shuffled. Optionally show the track title, artist, album and cover art on screen, read from the file's own tags. Files are only read locally.
+- **Filters.** Brightness, contrast, saturation, hue shift, color split, tint, picture opacity and invert, over any theme.
+- **Timer and clock.** An optional play timer and a real-time clock (you type your own UTC offset; 8tris never looks up your timezone), each with its own position, size, opacity, font and bold, and able to stack.
+- **Layout.** Move the board anywhere in the play area, move the Preferences button, and choose how many upcoming pieces to see (0 to 10).
 - **Effects ladder.** Off, A bit, Moderate, High, Intense, with a flash limiter and a Reduce motion switch. Advanced options let combo and perfect-clear visuals and sounds differ.
 - **Display.** Window size, full screen, render resolution, refresh rate and a frame counter.
-- **Appearance.** Settings menu font (DejaVu Sans, Liberation Sans, Carlito, Liberation Serif, Liberation Mono, Atkinson Hyperlegible, OpenDyslexic), bold, italic, text size, menu width, line spacing and a high contrast menu. These never change the game's own text.
-- **History.** Every finished run is saved with the settings it used, and can be exported as text.
+- **Appearance.** Preferences menu font (DejaVu Sans, Liberation Sans, Carlito, Liberation Serif, Liberation Mono, Atkinson Hyperlegible, OpenDyslexic), bold, italic, text size, menu width, line spacing and a high contrast menu. These never change the game's own text.
+- **History.** Every finished run is saved with the preferences it used, and can be exported as text.
 
 ## Epilepsy caution
 
@@ -60,4 +64,4 @@ Sound is table-driven: to add a voice, add a row to `VOICES` in `src/audio.c`. T
 
 ## Fonts and licenses
 
-The program's text uses DejaVu Sans (free Bitstream Vera license). The settings menu can also use Liberation, Carlito, Atkinson Hyperlegible and OpenDyslexic, bundled as Latin subsets under the SIL Open Font License. See `FONTS.txt`. `stb_truetype.h` is public domain. No license has been chosen yet for the 8tris code itself.
+The program's text uses DejaVu Sans (free Bitstream Vera license). The preferences menu can also use Liberation, Carlito, Atkinson Hyperlegible and OpenDyslexic, bundled as Latin subsets under the SIL Open Font License. See `FONTS.txt`. `stb_truetype.h` is public domain. No license has been chosen yet for the 8tris code itself.

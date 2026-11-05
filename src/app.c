@@ -32,7 +32,11 @@ static void wild_page(double now){
 }
 // ---- Side strip: held pieces, next pieces and the Preferences button ----
 static int stripX(void){return WW-80;}
-static void strip_button_rect(int*x,int*y,int*w,int*h){*x=stripX()+3;*w=74;*h=30;*y=WH-8-30;}
+static void strip_button_rect(int*x,int*y,int*w,int*h){
+  int stW=stripX(),m=8;*w=74;*h=30;
+  if(prefBtn==6){*x=stW+3;*y=WH-8-30;return;}
+  {int col=prefBtn%3;*x=col==0?m:col==1?(stW-74)/2:stW-m-74;*y=prefBtn<3?m:WH-m-30;}
+}
 static void draw_strip(double now){
   int sx=stripX(),i;
   if(T(C_PANEL)==TH_SWIRL){swirl_fill(1,sx,0,80,WH,6,tm(now)+4000,.32,50);
@@ -60,7 +64,7 @@ static void draw_strip(double now){
 void app_init(void){
   int i;rs_^=(u32)time(NULL)*2654435761u;if(!rs_)rs_=1;
   binds_default();for(i=0;i<N_COMPS;i++)TC[i]=TH_MIN;fxMaster=1;
-  levels_init();load_settings();hist_load();resolve_fx();pend_load();snd_voice=snd_theme();
+  levels_init();load_settings();music_scan();hist_load();resolve_fx();pend_load();snd_voice=snd_theme();
   NOW=0;reset_game();paused=0;menu=0;
 }
 void app_key(int key,int down,int repeat){
@@ -86,21 +90,142 @@ void app_focus_lost(void){clearHeld();mdown=0;active_id=0;if(!over&&!menu&&piece
 void app_audio(float*out,int frames){audio_mix(out,frames);}
 void app_shutdown(void){focus_commit();endRun();save_settings();}
 
+// ---- Optional play timer and real-time clock: placed and styled from the Theming tab; stacked when they share a place ----
+typedef struct{char s[24];double sz,w,h,asc;}ClkBox;
+static void clk_ctx(int i){fctx_on=1;fctx_fam=CLK[i].fam;fctx_bold=CLK[i].bold;fctx_ital=0;}
+// Digits all get the width of a "0" so the text does not jitter as the numbers change.
+static double clk_width(double sz,const char*s){double dw=text_w(0,sz,"0"),w=0;for(;*s;s++){char c[2]={*s,0};w+=(*s>='0'&&*s<='9')?dw:text_w(0,sz,c);}return w;}
+static void clk_string(int i,char*s,int n){
+  if(i==0){int sec=(int)floor(playMs/1000);if(sec>=3600)snprintf(s,n,"%d:%02d:%02d",sec/3600,sec/60%60,sec%60);else snprintf(s,n,"%d:%02d",sec/60,sec%60);return;}
+  // Real time: the device's UTC clock plus the offset typed in the preferences. The device's own timezone is never read.
+  int off=(clkTzH<0?-1:1)*(abs(clkTzH)*60+clkTzM)+(clkDst?60:0);
+  time_t t=time(NULL)+(time_t)off*60;struct tm*g=gmtime(&t);if(!g){snprintf(s,n,"--:--");return;}
+  if(clk24)snprintf(s,n,clkSecs?"%02d:%02d:%02d":"%02d:%02d",g->tm_hour,g->tm_min,g->tm_sec);
+  else{int h=g->tm_hour%12;if(!h)h=12;if(clkSecs)snprintf(s,n,"%d:%02d:%02d %s",h,g->tm_min,g->tm_sec,g->tm_hour<12?"AM":"PM");else snprintf(s,n,"%d:%02d %s",h,g->tm_min,g->tm_hour<12?"AM":"PM");}
+}
+static void clk_measure(int i,ClkBox*b){
+  clk_string(i,b->s,sizeof b->s);clk_ctx(i);b->sz=CLK[i].sz*UZ;b->w=clk_width(b->sz,b->s);
+  if(CLK[i].pos==6&&b->w>74){b->sz=b->sz*74/b->w;b->w=clk_width(b->sz,b->s);}   // in the side panel the text shrinks to fit
+  double d;text_ascent(0,b->sz,&b->asc,&d);b->h=b->asc-d;fctx_on=0;
+}
+static void clk_draw(int i,const ClkBox*b,double x,double y){
+  // Dark text on light pictures and light text on dark ones, judged from the pixels actually behind the text (so themes, tints and inversion all work).
+  int lum=0,cnt=0,gx,gy;for(gy=0;gy<3;gy++)for(gx=0;gx<5;gx++){int px=(int)(x+b->w*(gx+.5)/5),py=(int)(y+b->h*(gy+.5)/3);if(px>=0&&py>=0&&px<FW&&py<FH){u32 c=FB[(size_t)py*FW+px];lum+=(int)((((c>>16)&255)*54+((c>>8)&255)*183+(c&255)*19)>>8);cnt++;}}
+  int light=cnt&&lum/cnt>140;u32 fg=light?HEX(0):HEX(0xffffff),sh=light?HEX(0xffffff):HEX(0);double al=CLK[i].op/100.0,dw;
+  clk_ctx(i);dw=text_w(0,b->sz,"0");
+  int pass;for(pass=0;pass<2;pass++){
+    double px=x+(pass==0?UZ:0),py=y+b->asc+(pass==0?UZ:0);const char*p;
+    for(p=b->s;*p;p++){char c[2]={*p,0};int dg=*p>='0'&&*p<='9';double cw=text_w(0,b->sz,c);
+      text_at(0,b->sz,dg?px+(dw-cw)/2:px,py,pass==0?sh:fg,pass==0?al*.5:al,c);px+=dg?dw:cw;}
+  }
+  fctx_on=0;
+}
+// ---- "Now playing": title (and artist/album) of the current music file, with its album art, from the file's own tags ----
+static double np_fit(const char*s,double sz,double maxw,char*out,int n){   // shortens with an ellipsis until it fits maxw
+  snprintf(out,n,"%s",s);double w=text_w(0,sz,out);if(w<=maxw)return w;
+  int len=(int)strlen(out);while(len>1){len--;while(len>0&&((unsigned char)out[len]&0xC0)==0x80)len--;char t[260];memcpy(t,out,(size_t)len);t[len]=0;snprintf(out,n,"%s\xE2\x80\xA6",t);out[len+3]=0;if(text_w(0,sz,out)<=maxw){out[n-1]=0;return text_w(0,sz,out);}out[len]=0;}
+  return text_w(0,sz,out);
+}
+static void draw_nowplaying(void){
+  if(!NP.on||!musMode||!mus_buf)return;
+  int stW=stripX();double m=12*UZ,sz=NP.sz*UZ,maxw=stW*.45,gap=10*UZ;
+  char l1[300],l2[300],det[300];const Meta*mt=&cur_meta;
+  fctx_on=1;fctx_fam=NP.fam;fctx_bold=NP.bold;fctx_ital=0;
+  det[0]=0;if(npArtist){if(mt->artist[0]&&mt->album[0])snprintf(det,sizeof det,"%s \xC2\xB7 %s",mt->artist,mt->album);else if(mt->artist[0])snprintf(det,sizeof det,"%s",mt->artist);else if(mt->album[0])snprintf(det,sizeof det,"%s",mt->album);}
+  double asc,desc;text_ascent(0,sz,&asc,&desc);double th=asc-desc,sz2=sz*.78,asc2,desc2;text_ascent(0,sz2,&asc2,&desc2);double th2=asc2-desc2;
+  double w1=np_fit(mt->title,sz,maxw,l1,sizeof l1),w2=det[0]?np_fit(det,sz2,maxw,l2,sizeof l2):0;
+  double tw=w1>w2?w1:w2,tH=th+(det[0]?th2+3*UZ:0);
+  int hasArt=npArt&&mt->art;double S=npArtSz*UZ,aw=0,ah=0;
+  if(hasArt){double sc=S/(mt->aw>mt->ah?mt->aw:mt->ah);aw=mt->aw*sc;ah=mt->ah*sc;}
+  double W_=(hasArt?S+gap:0)+tw,H_=hasArt?(S>tH?S:tH):tH;
+  int pos=NP.pos>5?5:NP.pos,col=pos%3;double x0=col==0?m:col==1?(stW-W_)/2:stW-m-W_,y0=pos<3?m:WH-m-H_;
+  double tx=x0+(hasArt?S+gap:0),ty=y0+(H_-tH)/2;
+  int lum=0,cnt=0,gx,gy;for(gy=0;gy<3;gy++)for(gx=0;gx<5;gx++){int px=(int)(x0+W_*(gx+.5)/5),py=(int)(y0+H_*(gy+.5)/3);if(px>=0&&py>=0&&px<FW&&py<FH){u32 c=FB[(size_t)py*FW+px];lum+=(int)((((c>>16)&255)*54+((c>>8)&255)*183+(c&255)*19)>>8);cnt++;}}
+  int light=cnt&&lum/cnt>140;u32 fg=light?HEX(0):HEX(0xffffff),sh=light?HEX(0xffffff):HEX(0);double al=NP.op/100.0;
+  if(hasArt){   // the picture, centered in its square, scaled with nearest-neighbour sampling
+    int ix=(int)(x0+(S-aw)/2),iy=(int)(y0+(H_-ah)/2),iw=(int)aw,ih=(int)ah,x,y,a255=(int)(al*255+.5);
+    for(y=0;y<ih;y++)for(x=0;x<iw;x++){int sx=x*mt->aw/iw,sy=y*mt->ah/ih;putpx(ix+x,iy+y,mt->art[sy*mt->aw+sx],a255);}
+    border_in(ix-1,iy-1,iw+2,ih+2,1,fg,al*.35);
+  }
+  {int pass;for(pass=0;pass<2;pass++){double o=pass==0?UZ:0;u32 c=pass==0?sh:fg;double a=pass==0?al*.5:al;
+    text_at(0,sz,tx+o,ty+asc+o,c,a,l1);if(det[0])text_at(0,sz2,tx+o,ty+th+3*UZ+asc2+o,c,a*.85,l2);}}
+  fctx_on=0;
+}
+static void draw_clocks(void){
+  ClkBox b[2];int i,pos,stW=stripX();double m=12*UZ,gap_v=4*UZ,gap_h=16*UZ;
+  for(i=0;i<2;i++)if(CLK[i].on)clk_measure(i,&b[i]);
+  for(pos=0;pos<7;pos++){
+    int mem[2],k=0;int first=stackFirst?1:0;
+    for(i=0;i<2;i++){int j=i?1-first:first;if(CLK[j].on&&CLK[j].pos==pos)mem[k++]=j;}
+    if(!k)continue;
+    int col=pos<6?pos%3:1,top=pos<3,vert=pos==6||stackV||k==1;
+    if(vert){
+      double H=0,y0;for(i=0;i<k;i++)H+=b[mem[i]].h+(i?gap_v:0);
+      if(pos==6)y0=WH-8-30-10-H;else y0=top?m:WH-m-H;
+      for(i=0;i<k;i++){ClkBox*c=&b[mem[i]];double x=pos==6?stW+(80-c->w)/2:col==0?m:col==1?(stW-c->w)/2:stW-m-c->w;clk_draw(mem[i],c,x,y0);y0+=c->h+gap_v;}
+    }else{
+      double G=gap_h,hm=0,x0,y0;for(i=0;i<k;i++){G+=b[mem[i]].w;if(b[mem[i]].h>hm)hm=b[mem[i]].h;}G-=gap_h*(k==1);if(k==2)G+=0;
+      x0=col==0?m:col==1?(stW-G)/2:stW-m-G;y0=top?m:WH-m-hm;
+      for(i=0;i<k;i++){ClkBox*c=&b[mem[i]];clk_draw(mem[i],c,x0,y0+(hm-c->h)/2);x0+=c->w+gap_h;}
+    }
+  }
+}
+// ---- Filters: one pass over the finished game picture (not the menu). Everything except the color split is a single 3x4 color matrix. ----
+static int flt_active(void){return fltBri||fltCon!=100||fltSat!=100||fltHue||fltSplit||fltTint||fltOp!=100||fltInv;}
+static void flt_mul(double M[3][4],const double A[3][4]){double n[3][4];int r,c,k;for(r=0;r<3;r++)for(c=0;c<4;c++){n[r][c]=(c==3)?A[r][3]:0;for(k=0;k<3;k++)n[r][c]+=A[r][k]*M[k][c];}memcpy(M,n,sizeof n);}
+static void flt_apply(void){
+  double M[3][4]={{1,0,0,0},{0,1,0,0},{0,0,1,0}},A[3][4];int r,c;
+  if(fltSat!=100){double s=fltSat/100.0,w[3]={.2126,.7152,.0722};for(r=0;r<3;r++)for(c=0;c<4;c++)A[r][c]=c==3?0:(1-s)*w[c]+(r==c?s:0);flt_mul(M,A);}
+  if(fltHue){double a=fltHue*3.14159265358979/180,co=cos(a),si=sin(a);
+    double H[3][4]={{.213+co*.787-si*.213,.715-co*.715-si*.715,.072-co*.072+si*.928,0},{.213-co*.213+si*.143,.715+co*.285+si*.140,.072-co*.072-si*.283,0},{.213-co*.213-si*.787,.715-co*.715+si*.715,.072+co*.928+si*.072,0}};flt_mul(M,H);}
+  if(fltTint){double t=fltTint/100.0,tc[3]={((fltTintC>>16)&255)/255.0,((fltTintC>>8)&255)/255.0,(fltTintC&255)/255.0};memset(A,0,sizeof A);for(r=0;r<3;r++)A[r][r]=1-t+t*tc[r];flt_mul(M,A);}
+  if(fltCon!=100){double k=fltCon/100.0;memset(A,0,sizeof A);for(r=0;r<3;r++){A[r][r]=k;A[r][3]=.5*(1-k);}flt_mul(M,A);}
+  if(fltBri){memset(A,0,sizeof A);for(r=0;r<3;r++){A[r][r]=1;A[r][3]=fltBri/100.0;}flt_mul(M,A);}
+  if(fltInv){memset(A,0,sizeof A);for(r=0;r<3;r++){A[r][r]=-1;A[r][3]=1;}flt_mul(M,A);}
+  if(fltOp!=100){double o=fltOp/100.0,base=pale(C_PAGE)?1:0;memset(A,0,sizeof A);for(r=0;r<3;r++){A[r][r]=o;A[r][3]=base*(1-o);}flt_mul(M,A);}
+  int mi[3][3],bi[3];for(r=0;r<3;r++){for(c=0;c<3;c++)mi[r][c]=(int)floor(M[r][c]*256+.5);bi[r]=(int)floor(M[r][3]*255*256+.5);}
+  int d=fltSplit?imax(1,fltSplit*FH/720):0,y,x;static u32*row=NULL;static int rowN=0;
+  if(d&&rowN<FW){free(row);row=(u32*)malloc(sizeof(u32)*(size_t)FW);rowN=row?FW:0;if(!row)d=0;}
+  // Without hue or saturation changes every channel is independent, so three lookup tables do the whole job.
+  int cross=0;for(r=0;r<3;r++)for(c=0;c<3;c++)if(r!=c&&mi[r][c])cross=1;
+  static unsigned char lut[3][256];if(!cross){for(r=0;r<3;r++)for(c=0;c<256;c++){int v=(mi[r][r]*c+bi[r])>>8;lut[r][c]=(unsigned char)(v<0?0:v>255?255:v);}}
+  for(y=0;y<FH;y++){u32*p=FB+(size_t)y*FW;const u32*src=p;
+    if(d){memcpy(row,p,sizeof(u32)*(size_t)FW);src=row;}
+    u32 memo_in=0,memo_out=0;int memo=0;   // runs of identical pixels (a black page, a flat panel) are converted once
+    for(x=0;x<FW;x++){
+      u32 px=src[x];
+      if(d){u32 lo=src[x-d<0?0:x-d],hi=src[x+d>=FW?FW-1:x+d];px=(px&0xFF00FF00u)|(lo&0x00FF0000u)|(hi&0x000000FFu);}
+      if(memo&&px==memo_in){p[x]=memo_out;continue;}
+      int R=(px>>16)&255,G=(px>>8)&255,B=px&255,o0,o1,o2;
+      if(cross){
+        o0=(mi[0][0]*R+mi[0][1]*G+mi[0][2]*B+bi[0])>>8;o1=(mi[1][0]*R+mi[1][1]*G+mi[1][2]*B+bi[1])>>8;o2=(mi[2][0]*R+mi[2][1]*G+mi[2][2]*B+bi[2])>>8;
+        o0=o0<0?0:o0>255?255:o0;o1=o1<0?0:o1>255?255:o1;o2=o2<0?0:o2>255?255:o2;
+      }else{o0=lut[0][R];o1=lut[1][G];o2=lut[2][B];}
+      u32 out=0xFF000000u|((u32)o0<<16)|((u32)o1<<8)|(u32)o2;p[x]=out;memo_in=px;memo_out=out;memo=1;
+    }
+  }
+}
 void app_frame(double now,u32*fb){
   double dt=prev_t<0?0:now-prev_t;prev_t=now;dt=dclamp(dt,0,100);NOW=now;
   gfx_target(fb,WW,WH);unclip();
   snd_voice=snd_theme();resolve_fx();
   game_step(dt);
+  if(board)refill();   // the "next pieces shown" count can change at any time
   if(T(C_PAGE)==TH_SWIRL){swirl_fill(0,0,0,WW,WH,6,tm(now),.9,50);swirl_loops(WW,WH,tm(now));}
   else if(T(C_PAGE)==TH_WILD)wild_page(now);else fill_rect(0,0,WW,WH,pale(C_PAGE)?HEX(0xffffff):HEX(0),1);
   // board layout inside the stage (everything left of the strip)
   int stW=stripX();S=imax(1,imin((stW-16)/W,(WH-16)/H));
   fx_shake(now);
-  double bw=W*S,bh=H*S;int ox=(stW-(int)bw)/2,oy=(WH-(int)bh)/2;
+  double bw=W*S,bh=H*S;int ox,oy;
+  {int lx=8,hx=stW-(int)bw-8,ly=8,hy=WH-(int)bh-8;   // the board slides between the edges of the play area, keeping an 8 px margin when there is room
+   ox=hx>lx?lx+(int)((hx-lx)*boardPX/100.0+.5):(stW-(int)bw)/2;oy=hy>ly?ly+(int)((hy-ly)*boardPY/100.0+.5):(WH-(int)bh)/2;}
   BX=ox+SHX;BY=oy+SHY;
   frame_draw(bw,bh,now);draw_board(now);draw_cover(pv_on);
   BX=ox;BY=oy;
   draw_strip(now);
+  music_tick();
+  if(flt_active())flt_apply();
+  if(!pv_on){draw_clocks();draw_nowplaying();}
   ui_frame(now);
   {static double t0=0;static int n=0;static double fps=0;n++;if(now-t0>=500){fps=n*1000.0/(now-t0);n=0;t0=now;}
    if(showFps&&!pv_on){char b[64];snprintf(b,sizeof b,"%.0f fps  %d\xC3\x97%d",fps,WW,WH);double sz=12*UZ;int w=(int)text_w(0,sz,b)+12*UZ;fill_rect(6,6,w,22*UZ,HEX(0),.6);text_mid(0,sz,12,6,22*UZ,HEX(0xffffff),1,b);}}
@@ -112,7 +237,7 @@ int app_selftest(void){
   app_init();app_resize(800,600);resSet=0;
   for(i=0;i<400;i++){t+=16.7;if(i%9==0){app_key('d',1,0);app_key('d',0,0);}if(i%13==0){app_key('j',1,0);app_key('j',0,0);}if(i%31==0){app_key(' ',1,0);app_key(' ',0,0);}fb=app_render(t,&fw,&fh);app_audio(au,1024);}
   app_key(K_ESC,1,0);app_key(K_ESC,0,0);for(i=0;i<20;i++){t+=16.7;fb=app_render(t,&fw,&fh);}
-  if(!menu){printf("FAIL: Esc did not open settings\n");bad++;}
+  if(!menu){printf("FAIL: Esc did not open preferences\n");bad++;}
   {int k;fxMaster=4;resolve_fx();pv_start();for(k=0;k<500;k++){t+=16.7;fb=app_render(t,&fw,&fh);app_audio(au,1024);int j;for(j=0;j<2048;j++){if(au[j]!=au[j]){bad++;break;}if(fabs(au[j])>peak)peak=fabs(au[j]);}}}
   for(i=0;i<fw*fh;i++)if(fb[i]&0xffffff)lit++;
   if(lit<1000){printf("FAIL: frame is blank\n");bad++;}

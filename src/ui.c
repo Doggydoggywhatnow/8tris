@@ -1,10 +1,10 @@
-// ===== SETTINGS SCREEN, POPUPS AND EFFECT PREVIEW =====
+// ===== PREFERENCES SCREEN, POPUPS AND EFFECT PREVIEW =====
 // An immediate-mode interface: every frame the panel is walked top to bottom, each widget draws itself and reports clicks.
 // Widgets: ui_head (collapsible section), ui_para / ui_warn (text), ui_check, ui_num, ui_slider, ui_select, ui_btn.
 static int UZ=1;
 static double UF=1;
 static const double MWF[3]={1,1.3,1.6},LSF[3]={1.45,1.7,2.0};   // menu width and paragraph line spacing choices
-#define LH (LSF[lsSel])      // extra zoom used only while the settings screen is open, so its text and controls are larger
+#define LH (LSF[lsSel])      // extra zoom used only while the preferences screen is open, so its text and controls are larger
 #define U(x) ((int)((x)*UZ*UF))
 static int mx=-9999,my=-9999,mdown=0,mclicked=0,clx=0,cly=0,ui_changed=0;
 static double wheel_acc=0;
@@ -46,7 +46,7 @@ static void ui_warn(const char*s){
 static void ui_sub(const char*s){cy+=U(12);if(vis(cy,U(20)))text_mid(0,U(14),PX,cy,U(20),P.fg,.8,s);cy+=U(24);}
 static int sec_open[8]={1,0,0,0,0,0,0,0},want_top=0;
 static int ui_head(const char*s,int*open,double now){
-  // In the settings screen the tabs at the top pick the section, so only the open section shows its heading.
+  // In the preferences screen the tabs at the top pick the section, so only the open section shows its heading.
   if(open>=sec_open&&open<sec_open+8&&!*open){int k,any=0;for(k=0;k<8;k++)any|=sec_open[k];if(any)return 0;}
   int h=U(34),y=cy;cy+=h;
   if(vis(y,h)){
@@ -195,7 +195,7 @@ static void dlg_end(Scr*s){
   PVY=0;PVH=FH; // the fixed footer buttons that follow are outside the scrolling view, so let them take clicks anywhere on screen
 }
 
-// ---- state edited by the settings screen but applied only on "Apply and restart" ----
+// ---- state edited by the preferences screen but applied only on "Apply and restart" ----
 static int pW=10,pH=20,pSlots=1,pClear=1,pWeights[12],pTw[7];
 static void pend_load(void){pW=W;pH=H;pSlots=slots;pClear=clearOn;memcpy(pWeights,weights,sizeof weights);memcpy(pTw,tw,sizeof tw);}
 static void apply_pending(void){
@@ -245,6 +245,8 @@ static void settings_panel(double now){
     {int sdv=sdRate;ui_num("Soft drop (rows/s)",&sdRate,1,500);(void)sdv;}
     if(ui_check("Level system",&lvlSys)){if(pieces>0&&!over)runDirty=1;level=curLevel();}
     ui_keys("With the level system on, the fall rate starts at your setting and speeds up every 100 cleared cells (10 lines on a 10-wide board), following the standard modern Tetris curve.");
+    ui_num("Next pieces shown",&NQ,0,10);
+    ui_keys("How many upcoming pieces you can see in the side panel (0 to 10). This changes right away. A short window may only have room for fewer.");
     ui_check("Line clearing",&pClear);
     if(!pClear)ui_warn("Line clearing is off: completed lines stay on the board, so 8tris becomes pure stacking. Scoring is disabled in this mode and runs are not saved to history.");
     ui_keys("Width, height, hold slots, piece sets and line clearing apply when you press Apply and restart.");
@@ -281,6 +283,47 @@ static void settings_panel(double now){
           if(btn_at(PX,cy,U(190),"Advanced effect options\xE2\x80\xA6"))advp_open=1;cy+=U(40);}
       }
     }
+    ui_sub("Filters");
+    ui_keys("Filters change the whole game picture on top of whichever themes are chosen. The menu and the timer and clock are not filtered.");
+    snprintf(b,sizeof b,"%+d",fltBri);ui_slider("Brightness",&fltBri,-50,50,b);
+    snprintf(b,sizeof b,"%d%%",fltCon);ui_slider("Contrast",&fltCon,50,150,b);
+    snprintf(b,sizeof b,"%d%%",fltSat);ui_slider("Saturation",&fltSat,0,200,b);
+    snprintf(b,sizeof b,"%d deg",fltHue);ui_slider("Hue shift",&fltHue,0,359,b);
+    snprintf(b,sizeof b,"%d px",fltSplit);ui_slider("Color split",&fltSplit,0,12,b);
+    snprintf(b,sizeof b,"%d%%",fltTint);ui_slider("Tint strength",&fltTint,0,100,b);
+    if(fltTint)ui_color("Tint color",&fltTintC,"Tint color",1);
+    snprintf(b,sizeof b,"%d%%",fltOp);ui_slider("Picture opacity",&fltOp,10,100,b);
+    ui_check("Invert colors",&fltInv);
+    if(btn_at(PX,cy,U(150),"Reset filters")){fltBri=0;fltCon=100;fltSat=100;fltHue=0;fltSplit=0;fltTint=0;fltOp=100;fltInv=0;fltTintC=0xFFFF9A3Cu;ui_changed=1;}
+    cy+=U(40);
+    {static const char*PN[7]={"Top left","Top center","Top right","Bottom left","Bottom center","Bottom right","Side panel"};
+     static const char*FN[7]={"DejaVu Sans (default)","Liberation Sans (Arial-like)","Carlito (Calibri-like)","Liberation Serif (Times-like)","Liberation Mono (monospace)","Atkinson Hyperlegible","OpenDyslexic"};
+     static const char*MN[4]={"00","15","30","45"};static const char*NM[2]={"Timer","Clock"};
+     static char L[2][6][40];int i;
+     for(i=0;i<2;i++){
+       ui_sub(i?"Real-time clock":"Game timer");
+       snprintf(L[i][0],40,"Show %s",i?"clock":"timer");ui_check(L[i][0],&CLK[i].on);
+       if(i==1&&CLK[1].on){
+         ui_num("UTC offset, hours",&clkTzH,-12,14);
+         int mi=clkTzM==15?1:clkTzM==30?2:clkTzM==45?3:0;ui_select("UTC offset, minutes",&mi,MN,4,15,0);clkTzM=mi*15;
+         ui_check("Daylight saving (+1 hour)",&clkDst);ui_check("24-hour clock",&clk24);ui_check("Show seconds",&clkSecs);
+         ui_keys("Type your own offset from UTC, for example -5 for New York in winter, or 5 and 30 for India. 8tris never looks up your timezone or location: it only reads the device's clock and adds the offset you enter.");
+       }
+       if(CLK[i].on){
+         snprintf(L[i][1],40,"%s position",NM[i]);ui_select(L[i][1],&CLK[i].pos,PN,7,127,0);
+         snprintf(L[i][2],40,"%s size",NM[i]);snprintf(b,sizeof b,"%d pt",CLK[i].sz);ui_slider(L[i][2],&CLK[i].sz,12,120,b);
+         snprintf(L[i][3],40,"%s opacity",NM[i]);snprintf(b,sizeof b,"%d%%",CLK[i].op);ui_slider(L[i][3],&CLK[i].op,10,100,b);
+         snprintf(L[i][4],40,"%s font",NM[i]);ui_select(L[i][4],&CLK[i].fam,FN,7,127,0);
+         snprintf(L[i][5],40,"%s bold",NM[i]);ui_check(L[i][5],&CLK[i].bold);
+         if(i==0)ui_keys("Counts play time only: it stops while paused or in this menu, and starts over with each game. In the side panel the size shrinks to fit.");
+       }
+     }
+     if(CLK[0].on&&CLK[1].on){
+       static const char*SV[2]={"Side by side","One above the other"},*SF[2]={"Game timer first","Clock first"};
+       ui_sub("Stacking");
+       ui_select("Stack direction",&stackV,SV,2,3,0);ui_select("Stack order",&stackFirst,SF,2,3,0);
+       ui_keys("These apply when the timer and the clock are set to the same position. The side panel always stacks one above the other.");
+     }}
     ui_sub("Effects");
     ui_select("Effects",&fxMaster,LVN,5,31,0);
     {char d[400];int lv=capLv(fxMaster);snprintf(d,sizeof d,"%s%s",lv?"Adds ":"",EFF_ADD[lv]);if(lv)strncat(d," Each level keeps everything from the levels below it.",sizeof d-strlen(d)-1);ui_keys(d);}
@@ -298,6 +341,31 @@ static void settings_panel(double now){
     int pv=(int)floor(snd_vol*100+.5);snprintf(b,sizeof b,pv?"%d%%":"Off",pv);
     if(ui_slider("Sound effects",&pv,0,100,b))snd_vol=pv/100.0;
     ui_keys("The sound voice and which sounds play with effects are set in Theming.");
+    ui_sub("Music");
+    {static const char*MM[4]={"Off","Repeat one track","Play all in order","Play all shuffled"};static int was=0;
+     if(!was){music_scan();}was=1;
+     ui_select("Music",&musMode,MM,4,15,0);
+     if(musMode){
+       if(musMode==1&&nmfiles){static const char*nm[MUS_MAXFILES];int k;for(k=0;k<nmfiles;k++)nm[k]=mfiles[k];int sel=musSel;ui_select("Track",&sel,nm,nmfiles,-1,0);if(sel!=musSel&&sel>=0&&sel<nmfiles){musSel=sel;snprintf(musFile,sizeof musFile,"%s",mfiles[sel]);}}
+       snprintf(b,sizeof b,musVol?"%d%%":"Off",musVol);ui_slider("Music volume",&musVol,0,100,b);
+       if(mus_status[0])ui_keys(mus_status);
+       {static const char*TPN[6]={"Top left","Top center","Top right","Bottom left","Bottom center","Bottom right"};
+        static const char*TFN[7]={"DejaVu Sans (default)","Liberation Sans (Arial-like)","Carlito (Calibri-like)","Liberation Serif (Times-like)","Liberation Mono (monospace)","Atkinson Hyperlegible","OpenDyslexic"};
+        ui_check("Show track on screen",&NP.on);
+        if(NP.on){
+          ui_select("Track display position",&NP.pos,TPN,6,63,0);
+          snprintf(b,sizeof b,"%d pt",NP.sz);ui_slider("Track display size",&NP.sz,10,48,b);
+          snprintf(b,sizeof b,"%d%%",NP.op);ui_slider("Track display opacity",&NP.op,10,100,b);
+          ui_select("Track display font",&NP.fam,TFN,7,127,0);ui_check("Track display bold",&NP.bold);
+          ui_check("Show artist and album",&npArtist);ui_check("Show album art",&npArt);
+          if(npArt){snprintf(b,sizeof b,"%d px",npArtSz);ui_slider("Album art size",&npArtSz,32,256,b);}
+          ui_keys("The title, artist, album and cover picture are read from the music file's own tags. If a file has no title tag, its file name is shown.");
+        }}
+     }
+     snprintf(b,sizeof b,"Music folder: %s",music_dir());ui_keys(b);
+     ui_keys("Put .mp3, .ogg, .wav or .flac files in that folder, then press Rescan. Files are only read on this computer, never copied or sent anywhere. Tracks up to 10 minutes are supported.");
+     if(btn_at(PX,cy,U(150),"Rescan folder")){music_scan();ui_changed=1;}
+     cy+=U(40);}
   }
   // ---- Display ----
   if(ui_head("Display",&sec_open[4],now)){
@@ -308,10 +376,15 @@ static void settings_panel(double now){
     ui_select("Refresh rate",&fpsSet,FPSN,10,1023,0);
     ui_keys("How often the picture is redrawn. Match display (vsync) is the smoothest and easiest on power. A fixed rate caps it; Unlimited draws as fast as it can and may tear.");
     ui_check("Show frame rate",&showFps);
+    {static const char*BP[7]={"Top left","Top center","Top right","Bottom left","Bottom center","Bottom right","Side panel (default)"};ui_select("Preferences button",&prefBtn,BP,7,127,0);}
+    ui_keys("Where the Preferences button sits. Esc always opens preferences too, wherever the button is.");
+    snprintf(b,sizeof b,boardPX==0?"Left":boardPX==100?"Right":boardPX==50?"Center":"%d%%",boardPX);ui_slider("Board, left to right",&boardPX,0,100,b);
+    snprintf(b,sizeof b,boardPY==0?"Top":boardPY==100?"Bottom":boardPY==50?"Center":"%d%%",boardPY);ui_slider("Board, top to bottom",&boardPY,0,100,b);
+    if(boardPX!=50||boardPY!=50){if(btn_at(PX,cy,U(150),"Center the board")){boardPX=50;boardPY=50;ui_changed=1;}cy+=U(40);}
   }
   // ---- Appearance ----
   if(ui_head("Appearance",&sec_open[7],now)){
-    ui_keys("These change how the settings menu looks and reads. They never change the board, the pieces or the text shown during play.");
+    ui_keys("These change how the preferences menu looks and reads. They never change the board, the pieces or the text shown during play.");
     {static const char*FAMN[7]={"DejaVu Sans (default)","Liberation Sans (Arial-like)","Carlito (Calibri-like)","Liberation Serif (Times-like)","Liberation Mono (monospace)","Atkinson Hyperlegible","OpenDyslexic"};
      ui_select("Font",&uiFam,FAMN,7,127,0);}
     ui_keys("Atkinson Hyperlegible is designed for low vision, and OpenDyslexic for readers with dyslexia.");
@@ -346,7 +419,7 @@ static void settings_panel(double now){
         double sz=U(12);while(sz>8&&text_w(0,sz,t)>bw-U(8))sz--;
         text_center(0,sz,x+bw/2.0,y+U(19),(hot&&!listening)?P.bg:P.fg,1,t);
         if(uhit(x,y,bw,U(30))){bind_listen=a*2+s;focus_commit();}}}
-    ui_keys("Click a key, then press the new one. Backspace clears it, Esc cancels. Esc always opens settings. F11 toggles full screen.");
+    ui_keys("Click a key, then press the new one. Backspace clears it, Esc cancels. Esc always opens preferences. F11 toggles full screen.");
   }
   // ---- History ----
   if(ui_head("History",&sec_open[6],now)){
@@ -474,7 +547,7 @@ static const char* IDEAS[5][2]={
  {"Open ended.","Any board size, pieces from 1 to 10 blocks or letters, several hold slots, your own keys and your own pace. Presets are starting points, not rules."},
  {"Modern by default.","Where it can, 8tris plays like current Tetris. Where it does not, the list below says so."},
  {"Honest scores.","Scoring adjusts for board width and piece size, and history records every setting, so runs can be compared fairly."},
- {"Yours alone.","Settings and history stay in a folder on this computer. 8tris does not send them anywhere, and it runs as a plain native program with no browser inside."}};
+ {"Yours alone.","Preferences and history stay in a folder on this computer. 8tris does not send them anywhere, and it runs as a plain native program with no browser inside."}};
 static const char* DIFFS[10][2]={
  {"Board:","any size from 4 to 500 in each direction (default 10 by 20). There are no hidden rows above the board; pieces appear inside the top rows."},
  {"Pieces:","besides the 7 tetrominoes there are pieces of 1 to 10 blocks and letters A to Z, picked by size weight. Each size has its own shuffled bag, so with only size 4 on it behaves like a normal 7-bag."},
@@ -494,7 +567,8 @@ static void about_popup(double now){
   for(i=0;i<5;i++){text_mid(1,U(13),PX+U(8),cy,U(20),P.fg,.95,IDEAS[i][0]);cy+=U(20);cy+=para(0,U(13),PX+U(8),cy,PW-U(8),LH,P.fg,.85,IDEAS[i][1],1)+U(6);}
   {int one=1;ui_head("How 8tris differs from modern Tetris",&one,now);}
   for(i=0;i<10;i++){text_mid(1,U(13),PX+U(8),cy,U(20),P.fg,.95,DIFFS[i][0]);cy+=U(20);cy+=para(0,U(13),PX+U(8),cy,PW-U(8),LH,P.fg,.85,DIFFS[i][1],1)+U(6);}
-  cy+=para(0,U(11),PX,cy,PW,LH,P.fg,.5,"Game text is set in DejaVu Sans (free Bitstream Vera license). The settings menu can also use Liberation, Carlito, Atkinson Hyperlegible and OpenDyslexic, all under the SIL Open Font License.",1)+U(6);
+  cy+=para(0,U(11),PX,cy,PW,LH,P.fg,.5,"Game text is set in DejaVu Sans (free Bitstream Vera license). The preferences menu can also use Liberation, Carlito, Atkinson Hyperlegible and OpenDyslexic, all under the SIL Open Font License.",1)+U(6);
+  cy+=para(0,U(11),PX,cy,PW,LH,P.fg,.5,"Music files are decoded with dr_mp3, dr_flac, dr_wav (David Reid), stb_vorbis and stb_image (Sean Barrett), all public domain or MIT-0.",1)+U(6);
   text_right(0,U(11),PX+PW,cy+U(12),P.fg,.4,"Created by Claude");cy+=U(24);
   dlg_end(&scr_about);
   {int by=DY+DHH-DPAD-U(30);fill_rect(DX+DPAD,by-U(8),PW,1,P.sep,1);if(btn_at(DX+DPAD,by,U(80),"Close"))about_open=0;}
@@ -553,6 +627,7 @@ static int ui_key(int key,int down){
   if(focus_id){
     int n=(int)strlen(fbuf);
     if(key>='0'&&key<='9'){if(f_fresh){fbuf[0]=0;n=0;f_fresh=0;}if(n<(f_dptr?8:6)){if(!f_dptr&&n==1&&fbuf[0]=='0'){fbuf[0]=(char)key;}else{fbuf[n]=(char)key;fbuf[n+1]=0;}}}
+    else if(key=='-'&&f_lo<0&&!f_dptr){if(f_fresh){fbuf[0]=0;n=0;f_fresh=0;}if(n==0){fbuf[0]='-';fbuf[1]=0;}}
     else if(key=='.'&&f_dptr){if(f_fresh){fbuf[0]=0;n=0;f_fresh=0;}if(n<8&&!strchr(fbuf,'.')){if(n==0){fbuf[0]='0';n=1;}fbuf[n]='.';fbuf[n+1]=0;}}
     else if(key==K_BKSP){if(f_fresh){fbuf[0]=0;f_fresh=0;}else if(n>0)fbuf[n-1]=0;}
     else if(key==K_ENTER||key==K_TAB)focus_commit();

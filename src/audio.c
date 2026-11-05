@@ -129,6 +129,7 @@ static float master_tick(float x){
   if(mn<lim_gain)lim_gain=mn;else lim_gain+=(1-lim_gain)*.002;
   int rp=(lim_pos+1)&63;float o=lim_dly[rp]*(float)lim_gain;lim_pos=(lim_pos+1)&63;return o;
 }
+static void music_mix(float*out,int n);
 static void audio_mix(float*out,int n){
   static float dry[8192],snd[8192];int i,k;if(n>8192)n=8192;
   reverb_init();memset(dry,0,n*4);memset(snd,0,n*4);
@@ -136,6 +137,7 @@ static void audio_mix(float*out,int n){
   for(k=0;k<NVOX;k++)if(VX[k].active)vox_render(&VX[k],dry,snd,samples_done,n);
   samples_done+=n;plat_unlock();
   for(i=0;i<n;i++){float x=(dry[i]+reverb_tick(snd[i])*(float)rv_scale)*(float)snd_vol*(float)TRIM_GAIN;float y=master_tick(x);out[2*i]=y;out[2*i+1]=y;}
+  music_mix(out,n);
 }
 
 // ---- Gameplay blips and effect sounds ----
