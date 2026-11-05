@@ -44,7 +44,7 @@ static void endRun(void){
 }
 static const char* FXN[5]={"none","a bit","moderate","high","intense"};
 static void fmt_date(i64 t,char*out,int n){time_t tt=(time_t)t;struct tm*m=localtime(&tt);if(!m){snprintf(out,n,"?");return;}snprintf(out,n,"%04d-%02d-%02d %02d:%02d",m->tm_year+1900,m->tm_mon+1,m->tm_mday,m->tm_hour,m->tm_min);}
-static void fmt_time(int sec,char*out,int n){snprintf(out,n,"%d:%02d",sec/60,sec%60);}
+static void fmt_time(int sec,char*out,int n){if(sec<0)sec=0;if(sec>=3600)snprintf(out,n,"%d:%02d:%02d",sec/3600,sec/60%60,sec%60);else snprintf(out,n,"%d:%02d",sec/60,sec%60);}
 // Every setting of a run as plain-text lines. Returns the number of lines written into out (each at most 400 chars).
 static int setting_lines(const Snap*s,char out[][400],int cap){
   int n=0,i,any=0;char b[400];

@@ -353,7 +353,7 @@ static void settings_panel(double now){
     ui_keys("Finished runs are saved on this computer with every setting used, including graphics, sound and controls.");
     int shown=imin(nhist,25);static char L[60][400];
     for(i=0;i<shown;i++){
-      char d[32],hb[120];fmt_date(hist[i].t,d,32);snprintf(hb,sizeof hb,"%s",d);
+      char d[32],tl[16],hb[120];fmt_date(hist[i].t,d,32);fmt_time(hist[i].time,tl,16);snprintf(hb,sizeof hb,"%s  \xC2\xB7  %s",d,tl);
       int open=hist_open[i],y=cy,inner=PW-U(16),h=U(28);
       int n=entry_lines(&hist[i],L,60),j,extra=0;
       if(open)for(j=1;j<n;j++)extra+=para(0,U(11),0,0,inner,LH,P.fg,.85,L[j],0);

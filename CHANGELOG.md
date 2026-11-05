@@ -2,6 +2,9 @@
 
 Versions are `major.minor.patch`. Until about ten changes have built up, new features are shipped as patch releases, so a patch number here can include features. This file is the real record of what changed.
 
+## 0.6.7
+- History now shows the length of each game right in the list, next to the date (it was only visible after opening an entry). Games over an hour show as h:mm:ss. Paused time is not counted.
+
 ## 0.6.6
 - The **Settings** button in the side panel now reads **Preferences** (slightly wider button, smaller text so it fits).
 - Bug hunt: ran the game under memory and undefined-behaviour checkers with randomised settings files, damaged history files, random window sizes and thousands of random key and mouse events, plus 300 random games checking the rules. No crashes found.
