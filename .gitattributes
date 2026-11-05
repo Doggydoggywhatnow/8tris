@@ -1,0 +1,7 @@
+# 8tris is written in C. GitHub guesses C++ for .h files, so say what they are.
+*.h linguist-language=C
+# Third-party libraries and generated data should not count toward the language statistics.
+src/dr_*.h linguist-vendored
+src/stb_*.h linguist-vendored
+src/stb_vorbis.c linguist-vendored
+src/fontdata*.h linguist-generated

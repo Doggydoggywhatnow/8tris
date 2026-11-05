@@ -2,6 +2,9 @@
 
 Versions are `major.minor.patch`. Until about ten changes have built up, new features are shipped as patch releases, so a patch number here can include features. This file is the real record of what changed.
 
+## 0.7.2
+- Repository only, no new program build (the 0.7.1 downloads are still the current ones): added `.gitattributes` so GitHub shows 8tris as the C program it is. Header files were being counted as C++, and bundled third-party libraries and generated font data are now marked as vendored and generated.
+
 ## 0.7.1
 - **Privacy fix:** dates in History (and the name of an exported history file) no longer use the device's timezone. They are shown in UTC plus the offset you type in, the same offset the real-time clock uses (default: UTC). Set it in Preferences, History or under Theming, Real-time clock. 8tris now never reads the device's timezone or location anywhere.
 - Added `test/tz.c`, which checks that dates come out identical whatever timezone the device is set to.
