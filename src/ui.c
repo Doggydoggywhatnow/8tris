@@ -79,7 +79,7 @@ static int check_at(int x,int y,int w,const char*lab,int*v){
   box(x,y+U(3),U(18),U(18),0);if(*v)fill_rect(x+U(4),y+U(7),U(10),U(10),P.fg,1);text_mid(0,U(14),x+U(26),y,U(24),P.fg,1,lab);
   if(uhit(x,y,w,U(24))){*v=!*v;ui_changed=1;return 1;}return 0;
 }
-// Hex color entry state (the colors for the Solid color theme). Typing a full 6 digits applies live; Enter or clicking away also accepts 3 digits.
+// Hex color entry state (the colors for the Solid Color theme). Typing a full 6 digits applies live; Enter or clicking away also accepts 3 digits.
 static unsigned hx_id=0;static u32*hx_ptr=NULL;static char hx_buf[8];static int hx_fresh=0,hx_x,hx_y,hx_w,hx_h;
 static void hx_commit(void){if(!hx_id)return;int n=(int)strlen(hx_buf);
   if(n==3){u32 v=(u32)strtoul(hx_buf,NULL,16),r=(v>>8)&15,g=(v>>4)&15,b=v&15;*hx_ptr=HEX(((r*17)<<16)|((g*17)<<8)|(b*17));}
@@ -146,7 +146,7 @@ static void select_click(void){ // called first thing each frame when a click ha
   sel_open=0;mclicked=0;
 }
 
-// ---- color fields and the color picker (Solid color theme) ----
+// ---- color fields and the color picker (Solid Color theme) ----
 static int pk_open=0;static u32*pk_t=NULL;static u32 pk_rgb=0,pk_orig=0;static double pk_h=0,pk_s=1,pk_v=1;static char pk_name[48];
 static void hsv2rgb(double h,double sa,double v,int*r,int*g,int*b){
   h=fmod(h,360);if(h<0)h+=360;double c=v*sa,hp=h/60,x=c*(1-fabs(fmod(hp,2)-1)),m=v-c,R=0,G=0,B=0;
@@ -265,16 +265,18 @@ static void settings_panel(double now){
     if(!themeOn)ui_keys("Off by default: you get the standard 8tris look. Turn it on to choose a theme for each part of the game separately.");
     else{
       ui_sub("Presets (set every part at once)");
-      {int x=PX,t;for(t=0;t<N_THEMES;t++){int w=(int)text_w(0,U(14),THEME_NAME[t])+U(20);
+      {int x=PX,k;for(k=0;k<N_THEMES;k++){int t=THEME_ORDER[k],w=(int)text_w(0,U(14),THEME_NAME[t])+U(20);
         if(x>PX&&x+w>PX+PW){x=PX;cy+=U(36);}
         if(btn_at(x,cy,w,THEME_NAME[t])){int c;for(c=0;c<N_COMPS;c++)if((AVAIL[c]>>t)&1)TC[c]=t;ui_changed=1;}x+=w+U(6);}cy+=U(40);}
-      ui_sub("Each part on its own");
-      {int c;static const char*nm[N_COMPS][N_THEMES];
-       for(c=0;c<N_COMPS;c++){int t;for(t=0;t<N_THEMES;t++)nm[c][t]=theme_label(c,t);ui_select(COMP_NAME[c],&TC[c],nm[c],N_THEMES,AVAIL[c],0);}}
+      {int c;static const char*nm[N_COMPS][N_THEMES];static int pos[N_COMPS],prev[N_COMPS];   // pos: the theme's place in the list (a menu choice writes here)
+       for(c=0;c<N_COMPS;c++){int k,mask=0;
+         if(pos[c]!=prev[c])TC[c]=THEME_ORDER[pos[c]];                        // a choice was made last frame
+         for(k=0;k<N_THEMES;k++){int t=THEME_ORDER[k];nm[c][k]=theme_label(c,t);if((AVAIL[c]>>t)&1)mask|=1<<k;if(t==TC[c])pos[c]=k;}
+         prev[c]=pos[c];ui_select(COMP_NAME[c],&pos[c],nm[c],N_THEMES,mask,0);}}
       if(TC[C_PIECES]==TH_SOLID||TC[C_GHOST]==TH_SOLID){
-        ui_sub("Solid color");
+        ui_sub("Solid Color");
         if(!solidSep){ui_color("Color",&solidP,"Pieces and landing outline",1);
-          ui_keys("Used for Pieces and Landing outline wherever they are set to Solid color. Type a hex code like #3d9bff, or click the swatch for a full color picker. Advanced effect options lets each have its own color.");}
+          ui_keys("Used for Pieces and Landing outline wherever they are set to Solid Color. Type a hex code like #3d9bff, or click the swatch for a full color picker. Advanced effect options lets each have its own color.");}
         else{ui_keys("Pieces and Landing outline use separate colors, set in Advanced effect options below.");
           if(btn_at(PX,cy,U(190),"Advanced effect options\xE2\x80\xA6"))advp_open=1;cy+=U(40);}
       }
@@ -419,12 +421,12 @@ static void adv_popup(double now){
   ui_keys("Each row follows the master Effects level unless you pick a level here. Sound follows its own visuals by default, so you can have a loud combo with quiet visuals, or the other way round.");
   for(i=0;i<4;i++)ui_select(ADVROW[i],&ADV[i],ADVN,6,63,1);
   if(calm)ui_keys("Reduce motion is on, so every level here stops at Moderate.");
-  ui_sub("Solid color theme");
+  ui_sub("Solid Color theme");
   {int sp=solidSep;if(ui_check("Different colors",&sp)){if(sp&&!solidSep)solidG=solidP;solidSep=sp;}}
   if(solidSep){
     ui_keys("Pieces and the landing outline each get their own color. Click a swatch for the picker, or type a hex code.");
     ui_color("Pieces color",&solidP,"Pieces",1);ui_color("Landing outline color",&solidG,"Landing outline",1);
-  }else ui_keys("Pieces and the landing outline share one color, set under Theming. Turn this on to give each its own. These colors are used wherever Pieces or Landing outline is set to Solid color.");
+  }else ui_keys("Pieces and the landing outline share one color, set under Theming. Turn this on to give each its own. These colors are used wherever Pieces or Landing outline is set to Solid Color.");
   dlg_end(&scr_adv);
   {int by=DY+DHH-DPAD-U(30);fill_rect(DX+DPAD,by-U(8),PW,1,P.sep,1);if(btn_at(DX+DPAD,by,U(80),"Done"))advp_open=0;}
 }

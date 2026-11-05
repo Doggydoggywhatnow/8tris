@@ -8,12 +8,12 @@ You open it to a black board and plain gray blocks. Everything else is opt-in: a
 
 ## Download
 
-Latest version: **0.6.4**. Download the file for your system from the [`downloads`](downloads) folder (click the file, then the download button).
+Latest version: **0.6.5**. Download the file for your system from the [`downloads`](downloads) folder (click the file, then the download button).
 
 | Platform | File | Notes |
 |---|---|---|
-| Linux (x86_64) | [`8tris-0.6.4-x86_64.AppImage`](downloads/8tris-0.6.4-x86_64.AppImage) | `chmod +x` it and run. Needs glibc 2.38 or newer. |
-| Windows (x86_64) | [`8tris-0.6.4.exe`](downloads/8tris-0.6.4.exe) | Not code-signed, so SmartScreen may warn. Choose "More info", then "Run anyway". |
+| Linux (x86_64) | [`8tris-0.6.5-x86_64.AppImage`](downloads/8tris-0.6.5-x86_64.AppImage) | `chmod +x` it and run. Needs glibc 2.38 or newer. |
+| Windows (x86_64) | [`8tris-0.6.5.exe`](downloads/8tris-0.6.5.exe) | Not code-signed, so SmartScreen may warn. Choose "More info", then "Run anyway". |
 
 See the [changelog](CHANGELOG.md) for what changed in each version.
 
@@ -31,7 +31,7 @@ Settings and score history are saved in a folder on your computer and are never 
 
 ## Features
 
-- **Themes, mixed per part.** The page, side panel, settings menu, board frame, board, grid, pieces, landing outline, effects and sound each take their own theme: 8tris, Classic colors, Wild, Swirl, Solid color (any hex color, with a full color picker), 8tris Light and Graphite.
+- **Themes, mixed per part.** The page, side panel, settings menu, board frame, board, grid, pieces, landing outline, effects and sound each take their own theme: 8tris, 8tris Light, Graphite, Classic, Solid Color (any hex color, with a full color picker), Swirl and Wild.
 - **Sound.** A table-driven synth with a different voice per theme, combo and perfect-clear sounds that climb with your combo.
 - **Effects ladder.** Off, A bit, Moderate, High, Intense, with a flash limiter and a Reduce motion switch. Advanced options let combo and perfect-clear visuals and sounds differ.
 - **Display.** Window size, full screen, render resolution, refresh rate and a frame counter.

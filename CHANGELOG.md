@@ -2,6 +2,10 @@
 
 Versions are `major.minor.patch`. Until about ten changes have built up, new features are shipped as patch releases, so a patch number here can include features. This file is the real record of what changed.
 
+## 0.6.5
+- Theme **Classic colors** is now just **Classic**, and **Solid color** is now **Solid Color**.
+- Themes are listed in a new order everywhere: 8tris, 8tris Light, Graphite, Classic, Solid Color, Swirl, Wild. Saved settings are unaffected.
+
 ## 0.6.4
 - New **Graphite** theme, available for every part (page, side panel, settings menu, board frame, board, grid, pieces, landing outline, effects, sound): the 8tris look in light grey on white, with a light grey grid.
 
