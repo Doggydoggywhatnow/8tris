@@ -1,0 +1,6 @@
+8tris
+8tris.exe
+*.o
+*.squashfs
+*.AppImage
+gmon.out

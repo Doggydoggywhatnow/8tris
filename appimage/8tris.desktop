@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=8tris
+Comment=A minimal, heavily customizable Tetris
+Exec=8tris
+Icon=8tris
+Categories=Game;
+Terminal=false

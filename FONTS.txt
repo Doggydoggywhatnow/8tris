@@ -1,0 +1,1 @@
+Fonts bundled in 8tris (subsets for the settings menu): DejaVu Sans (Bitstream Vera license), Liberation Sans/Serif/Mono, Carlito, Atkinson Hyperlegible and OpenDyslexic (SIL Open Font License 1.1).
