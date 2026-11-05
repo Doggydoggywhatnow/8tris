@@ -15,6 +15,8 @@ Latest version: **0.6.4**. Download the file for your system from the [`download
 | Linux (x86_64) | [`8tris-0.6.4-x86_64.AppImage`](downloads/8tris-0.6.4-x86_64.AppImage) | `chmod +x` it and run. Needs glibc 2.38 or newer. |
 | Windows (x86_64) | [`8tris-0.6.4.exe`](downloads/8tris-0.6.4.exe) | Not code-signed, so SmartScreen may warn. Choose "More info", then "Run anyway". |
 
+See the [changelog](CHANGELOG.md) for what changed in each version.
+
 Settings and score history are saved in a folder on your computer and are never sent anywhere.
 
 ## Philosophy
