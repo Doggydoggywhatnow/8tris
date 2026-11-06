@@ -34,7 +34,7 @@ static Hist hist[MAXHIST];static int nhist=0;
 static void snapshot(Snap*s){
   int i;memset(s,0,sizeof*s);s->W=W;s->H=H;s->slots=slots;s->fall=floor(rateOf(fallV)*100+.5)/100;s->lvl=lvlSys;s->clear=clearOn;
   for(i=0;i<11;i++)s->weights[i]=weights[i+1];for(i=0;i<7;i++)s->tw[i]=tw[i];s->themeOn=themeOn;for(i=0;i<N_COMPS;i++)s->theme[i]=TC[i];
-  s->fx=fxLevel;s->pf=pcLevel;s->sc=sndCombo;s->sp=sndPf;s->sd=sdRate;s->vol=(int)floor(snd_vol*100+.5);memcpy(s->keys,binds,sizeof binds);s->song=comboSong;
+  s->fx=fxLevel;s->pf=pcLevel;s->sc=sndCombo;s->sp=sndPf;s->sd=sdRate;s->vol=ifloor(snd_vol*100+.5);memcpy(s->keys,binds,sizeof binds);s->song=comboSong;
 }
 static const char* get_pref_path(const char*name){static char b[600];snprintf(b,sizeof b,"%s%s",plat_pref_dir(),name);return b;}
 
@@ -122,7 +122,7 @@ static void hist_load(void){
 static void endRun(void){
   if(!board||saved)return;saved=1;if(!clearOn||pieces<1)return;int why=over?0:1;if(why==1&&score<=0)return;
   memmove(hist+1,hist,sizeof(Hist)*(nhist<MAXHIST?nhist:MAXHIST-1));if(nhist<MAXHIST)nhist++;
-  Hist*h=&hist[0];memset(h,0,sizeof*h);h->t=(i64)time(NULL);h->why=why;h->score=(int)floor(score);h->lines=lines;h->level=level;h->time=(int)floor(playMs/1000+.5);h->pieces=pieces;h->combo=maxCombo;h->dirty=runDirty;snapshot(&h->s);
+  Hist*h=&hist[0];memset(h,0,sizeof*h);h->t=(i64)time(NULL);h->why=why;h->score=ifloor(score);h->lines=lines;h->level=level;h->time=ifloor(playMs/1000+.5);h->pieces=pieces;h->combo=maxCombo;h->dirty=runDirty;snapshot(&h->s);
   hist_save();
 }
 static const char* FXN[5]={"none","a bit","moderate","high","intense"};
@@ -174,7 +174,7 @@ static const char* export_history(void){
 static void save_settings(void){
   if(store_off)return;
   char tmp[640],dst[600];snprintf(dst,sizeof dst,"%s",get_pref_path("settings.txt"));FILE*f=safe_open(dst,tmp,sizeof tmp);if(!f)return;int i;
-  fprintf(f,"grid=%d,%d\nslots=%d\nfall=%g\nlvl=%d\nclear=%d\nsd=%d\nvol=%d\nthemeOn=%d\ncalm=%d\nfxm=%d\nadv=%d,%d,%d,%d\nsolid=%06x,%06x,%d\nui=%d,%d,%d,%d,%d,%d,%d,%d\n",W,H,slots,fallV,lvlSys,clearOn,sdRate,(int)floor(snd_vol*100+.5),themeOn,calm,fxMaster,ADV[0],ADV[1],ADV[2],ADV[3],(unsigned)(solidP&0xFFFFFF),(unsigned)(solidG&0xFFFFFF),solidSep,uiFam,uiBold,uiItal,uiPt,hiCon,mwSel,lsSel,ghostStr);
+  fprintf(f,"grid=%d,%d\nslots=%d\nfall=%g\nlvl=%d\nclear=%d\nsd=%d\nvol=%d\nthemeOn=%d\ncalm=%d\nfxm=%d\nadv=%d,%d,%d,%d\nsolid=%06x,%06x,%d\nui=%d,%d,%d,%d,%d,%d,%d,%d\n",W,H,slots,fallV,lvlSys,clearOn,sdRate,ifloor(snd_vol*100+.5),themeOn,calm,fxMaster,ADV[0],ADV[1],ADV[2],ADV[3],(unsigned)(solidP&0xFFFFFF),(unsigned)(solidG&0xFFFFFF),solidSep,uiFam,uiBold,uiItal,uiPt,hiCon,mwSel,lsSel,ghostStr);
   fprintf(f,"timerms=%d\nbright=%d\nres=%d\nfps=%d\nshowfps=%d\ncombosong=%d\nnowplay=%d,%d,%d,%d,%d,%d,%d,%d,%d\nmusic=%d,%d\nmusicfile=%s\nmusicfolder=%s\npausebtn=%d,%d\nnext=%d\nprefbtn=%d\nboardpos=%d,%d\ntimer=%d,%d,%d,%d,%d,%d\nclock=%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\nstack=%d,%d\nfilters=%d,%d,%d,%d,%d,%d,%d,%d,%06x\n",timerMs,gBright,resSet,fpsSet,showFps,comboSong,NP.on,NP.pos,NP.sz,NP.op,NP.fam,NP.bold,npArt,npArtSz,npArtist,musMode,musVol,musFile,musFold,npPause,npPausePos,NQ,prefBtn,boardPX,boardPY,
     CLK[0].on,CLK[0].pos,CLK[0].sz,CLK[0].op,CLK[0].fam,CLK[0].bold,CLK[1].on,CLK[1].pos,CLK[1].sz,CLK[1].op,CLK[1].fam,CLK[1].bold,clkTzH,clkTzM,clkDst,clk24,clkSecs,stackV,stackFirst,
     fltBri,fltCon,fltSat,fltHue,fltSplit,fltTint,fltOp,fltInv,(unsigned)(fltTintC&0xFFFFFF));

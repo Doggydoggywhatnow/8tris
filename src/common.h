@@ -34,6 +34,9 @@ static inline int imax(int a,int b){return a>b?a:b;}
 static inline int iclamp(int v,int lo,int hi){return v<lo?lo:v>hi?hi:v;}
 static inline double dmin(double a,double b){return a<b?a:b;}
 static inline double dmax(double a,double b){return a>b?a:b;}
+// floor/ceil to int without a library call (the generic x86-64 build has no rounding instruction, so floor() is a function call).
+static inline int ifloor(double x){int i=(int)x;return i-(x<(double)i);}
+static inline int iceil(double x){int i=(int)x;return i+(x>(double)i);}
 static inline double dclamp(double v,double lo,double hi){return v!=v?lo:v<lo?lo:v>hi?hi:v;}
 
 static u32 rs_=0x9E3779B9u;

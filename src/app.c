@@ -106,7 +106,7 @@ static void clk_ctx(int i){fctx_on=1;fctx_fam=CLK[i].fam;fctx_bold=CLK[i].bold;f
 // Digits all get the width of a "0" so the text does not jitter as the numbers change.
 static double clk_width(double sz,const char*s){double dw=text_w(0,sz,"0"),w=0;for(;*s;s++){char c[2]={*s,0};w+=(*s>='0'&&*s<='9')?dw:text_w(0,sz,c);}return w;}
 static void clk_string(int i,char*s,int n){
-  if(i==0){int sec=(int)floor(playMs/1000);if(timerMs){int ms=(int)floor(playMs)%1000;if(sec>=3600)snprintf(s,n,"%d:%02d:%02d.%03d",sec/3600,sec/60%60,sec%60,ms);else snprintf(s,n,"%d:%02d.%03d",sec/60,sec%60,ms);return;}if(sec>=3600)snprintf(s,n,"%d:%02d:%02d",sec/3600,sec/60%60,sec%60);else snprintf(s,n,"%d:%02d",sec/60,sec%60);return;}
+  if(i==0){int sec=ifloor(playMs/1000);if(timerMs){int ms=ifloor(playMs)%1000;if(sec>=3600)snprintf(s,n,"%d:%02d:%02d.%03d",sec/3600,sec/60%60,sec%60,ms);else snprintf(s,n,"%d:%02d.%03d",sec/60,sec%60,ms);return;}if(sec>=3600)snprintf(s,n,"%d:%02d:%02d",sec/3600,sec/60%60,sec%60);else snprintf(s,n,"%d:%02d",sec/60,sec%60);return;}
   // Real time: the device's UTC clock plus the offset typed in the preferences. The device's own timezone is never read.
   int off=(clkTzH<0?-1:1)*(abs(clkTzH)*60+clkTzM)+(clkDst?60:0);
   time_t t=time(NULL)+(time_t)off*60;struct tm*g=gmtime(&t);if(!g){snprintf(s,n,"--:--");return;}
@@ -220,7 +220,7 @@ static void flt_apply(void){
   if(fltBri){memset(A,0,sizeof A);for(r=0;r<3;r++){A[r][r]=1;A[r][3]=fltBri/100.0;}flt_mul(M,A);}
   if(fltInv){memset(A,0,sizeof A);for(r=0;r<3;r++){A[r][r]=-1;A[r][3]=1;}flt_mul(M,A);}
   if(fltOp!=100){double o=fltOp/100.0,base=pale(C_PAGE)?1:0;memset(A,0,sizeof A);for(r=0;r<3;r++){A[r][r]=o;A[r][3]=base*(1-o);}flt_mul(M,A);}
-  int mi[3][3],bi[3];for(r=0;r<3;r++){for(c=0;c<3;c++)mi[r][c]=(int)floor(M[r][c]*256+.5);bi[r]=(int)floor(M[r][3]*255*256+.5);}
+  int mi[3][3],bi[3];for(r=0;r<3;r++){for(c=0;c<3;c++)mi[r][c]=ifloor(M[r][c]*256+.5);bi[r]=ifloor(M[r][3]*255*256+.5);}
   int d=fltSplit?imax(1,fltSplit*FH/720):0,y,x;static u32*row=NULL;static int rowN=0;
   if(d&&rowN<FW){free(row);row=(u32*)malloc(sizeof(u32)*(size_t)FW);rowN=row?FW:0;if(!row)d=0;}
   // Without hue or saturation changes every channel is independent, so three lookup tables do the whole job.

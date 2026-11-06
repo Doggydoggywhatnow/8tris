@@ -52,7 +52,7 @@ static void piece_paint(double x,double y,double s,int ci,double now,int gx,int 
   fill_rect(x+b*2,y+b*2,ins,ins,hsl(h+45,1,.72),.55);
   fill_rect(x,y,s,b,HEX(0xffffff),.6);fill_rect(x,y,b,s,HEX(0xffffff),.6);
   fill_rect(x,y+s-b,s,b,HEX(0),.35);fill_rect(x+s-b,y,b,s,HEX(0),.35);
-  if(s>=10&&(((gx*7+gy*13+(int)floor(tm(now)/140))%13)+13)%13==0){double m=floor(s/2);fill_rect(x+m-1,y+b+1,2,s-b*2-2,HEX(0xffffff),1);fill_rect(x+b+1,y+m-1,s-b*2-2,2,HEX(0xffffff),1);}
+  if(s>=10&&(((gx*7+gy*13+ifloor(tm(now)/140))%13)+13)%13==0){double m=floor(s/2);fill_rect(x+m-1,y+b+1,2,s-b*2-2,HEX(0xffffff),1);fill_rect(x+b+1,y+m-1,s-b*2-2,2,HEX(0xffffff),1);}
 }
 // ---- Landing outline ----
 static void ghost_paint(double x,double y,double s,int ci,double now,int gx,int gy){
@@ -92,7 +92,7 @@ static void grid_draw(double w,double h,double now){
     for(X=1;X<W;X++){u32 c=sw_col(X/(double)W+t*.00008);double ph=X*.9+t*.0012,k=1/(S*1.1);
       for(yy=0;yy<ih;yy++)aa_px(BX+X*S+fsin(yy*k+ph)*S*.05,BY+yy,c,.2);}
     for(Y=1;Y<H;Y++){u32 c=sw_col(Y/(double)H+.5+t*.00008);double ph=Y*.9-t*.0012,k=1/(S*1.1);
-      for(xx=0;xx<iw;xx++){double y=BY+Y*S+fsin(xx*k+ph)*S*.05;int iy=(int)floor(y);double f=y-iy;putpx(BX+xx,iy,c,A255(.2*(1-f)));putpx(BX+xx,iy+1,c,A255(.2*f));}}
+      for(xx=0;xx<iw;xx++){double y=BY+Y*S+fsin(xx*k+ph)*S*.05;int iy=ifloor(y);double f=y-iy;putpx(BX+xx,iy,c,A255(.2*(1-f)));putpx(BX+xx,iy+1,c,A255(.2*f));}}
   }
   else{double t=tm(now)/12;
     for(X=1;X<W;X++)fill_rect(BX+X*S,BY,1,h,hsl(X*360.0/W+t,1,.6),.4);
@@ -256,7 +256,7 @@ static void draw_cover(int preview){
   u32 ct=pale(C_BOARD)?HEX(0x101010):flat(C_BOARD)?HEX(flat(C_BOARD)==&FLAT_DARK?0x909090:flat(C_BOARD)->text):HEX(0xe0e0e0);
   double fs=dmax(12,dmin(32,w/7));
   text_center(0,fs,BX+w/2,BY+h/2,ct,1,over?"Game over":"Paused");
-  if(over){if(clearOn)snprintf(buf,sizeof buf,"Score %d. Press %s.",(int)floor(score),key_label(bind_key(A_RESTART,0)));else snprintf(buf,sizeof buf,"Press %s to restart.",key_label(bind_key(A_RESTART,0)));}
+  if(over){if(clearOn)snprintf(buf,sizeof buf,"Score %d. Press %s.",ifloor(score),key_label(bind_key(A_RESTART,0)));else snprintf(buf,sizeof buf,"Press %s to restart.",key_label(bind_key(A_RESTART,0)));}
   else snprintf(buf,sizeof buf,"Press %s to resume",key_label(bind_key(A_PAUSE,0)));
   text_center(0,fs*.55,BX+w/2,BY+h/2+fs,ct,1,buf);
   unclip();
@@ -266,6 +266,6 @@ static void draw_small(Def*d,double x0,double y0,double alpha,double now){
   int br[MAXN],bc[MAXN],w=0,h=0,i;(void)alpha;
   spawn_orient(d,br,bc);                                            // shown the way it will spawn (S and Z lie flat, I is horizontal, ...)
   for(i=0;i<d->n;i++){if(bc[i]+1>w)w=bc[i]+1;if(br[i]+1>h)h=br[i]+1;}
-  int u=iclamp((int)floor(56.0/imax(w,h)),2,14);double ox=x0+(80-w*u)/2.0,oy=y0+(64-h*u)/2.0;
+  int u=iclamp(ifloor(56.0/imax(w,h)),2,14);double ox=x0+(80-w*u)/2.0,oy=y0+(64-h*u)/2.0;
   for(i=0;i<d->n;i++)piece_paint(ox+bc[i]*u,oy+br[i]*u,u,d->ci,now,bc[i],br[i]);
 }

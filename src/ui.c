@@ -153,7 +153,7 @@ static int ui_slider(const char*lab,int*v,int lo,int hi,const char*vt){
   int y=cy,x=PX+PW-CWd(),w=CWd(),h=U(30);unsigned id=hid(lab,1),fid=hid(lab,6);int rv=0;cy+=U(36);if(!vis(y,h))return 0;
   label(y,lab);int bw=U(72),bx=x+w-bw,tx=x+U(4),tw=w-bw-U(18);
   if(uhit(tx-U(6),y,tw+U(12),h))active_id=id;
-  if(active_id==id&&mdown){int nv=lo+(int)floor((double)(mx-tx)/tw*(hi-lo)+.5);nv=iclamp(nv,lo,hi);if(nv!=*v){*v=nv;ui_changed=1;rv=1;}}
+  if(active_id==id&&mdown){int nv=lo+ifloor((double)(mx-tx)/tw*(hi-lo)+.5);nv=iclamp(nv,lo,hi);if(nv!=*v){*v=nv;ui_changed=1;rv=1;}}
   fill_rect(tx,y+h/2,tw,2,P.fg,.5);double fr=hi>lo?(double)(*v-lo)/(hi-lo):0;
   fill_rect(tx,y+h/2,tw*fr,2,P.fg,1);fill_rect(tx+tw*fr-U(5),y+h/2-U(8),U(10),U(17),P.fg,1);
   if(sl_notype){text_right(0,U(12),x+w,y+h/2+U(4),P.fg,1,vt);return rv;}
@@ -195,7 +195,7 @@ static int pk_open=0;static u32*pk_t=NULL;static u32 pk_rgb=0,pk_orig=0;static d
 static void hsv2rgb(double h,double sa,double v,int*r,int*g,int*b){
   h=fmod(h,360);if(h<0)h+=360;double c=v*sa,hp=h/60,x=c*(1-fabs(fmod(hp,2)-1)),m=v-c,R=0,G=0,B=0;
   if(hp<1){R=c;G=x;}else if(hp<2){R=x;G=c;}else if(hp<3){G=c;B=x;}else if(hp<4){G=x;B=c;}else if(hp<5){R=x;B=c;}else{R=c;B=x;}
-  *r=(int)floor((R+m)*255+.5);*g=(int)floor((G+m)*255+.5);*b=(int)floor((B+m)*255+.5);}
+  *r=ifloor((R+m)*255+.5);*g=ifloor((G+m)*255+.5);*b=ifloor((B+m)*255+.5);}
 static void rgb2hsv(int r,int g,int b,double*h,double*sa,double*v){
   double R=r/255.0,G=g/255.0,B=b/255.0,mx_=dmax(R,dmax(G,B)),mn=dmin(R,dmin(G,B)),d=mx_-mn;
   *v=mx_;*sa=mx_>0?d/mx_:0;
@@ -368,7 +368,7 @@ static void settings_panel(double now){
   // ---- Sound ----
   if(ui_head("Sound",&sec_open[3],now)){
     static int pv=-1,pvl=-1;   // static: a typed number is written into it between frames
-    {int cur=(int)floor(snd_vol*100+.5);if(pvl>=0&&pv!=pvl){snd_vol=pv/100.0;cur=pv;}pv=pvl=cur;}
+    {int cur=ifloor(snd_vol*100+.5);if(pvl>=0&&pv!=pvl){snd_vol=pv/100.0;cur=pv;}pv=pvl=cur;}
     snprintf(b,sizeof b,pv?"%d%%":"Off",pv);
     if(ui_slider("Sound effects",&pv,0,100,b))snd_vol=pv/100.0;
     ui_keys("The sound voice and which sounds play with effects are set in Theming.");
@@ -502,7 +502,7 @@ static void settings_panel(double now){
   dlg_end(&scr_main);
   if(want_top){scr_main.scroll=0;want_top=0;}
   // fixed top: run statistics
-  {int ty=DY+DPAD;snprintf(b,sizeof b,"Score %d",(int)floor(score));text_mid(0,U(14),DX+DPAD,ty,U(30),P.fg,1,b);
+  {int ty=DY+DPAD;snprintf(b,sizeof b,"Score %d",ifloor(score));text_mid(0,U(14),DX+DPAD,ty,U(30),P.fg,1,b);
    snprintf(b,sizeof b,"Lines %d",lines);text_mid(0,U(14),DX+DPAD+PW/2.0-text_w(0,U(14),b)/2,ty,U(30),P.fg,1,b);
    snprintf(b,sizeof b,"Level %d",level);text_mid(0,U(14),DX+DWW-DPAD-text_w(0,U(14),b),ty,U(30),P.fg,1,b);fill_rect(DX+DPAD,ty+U(34),PW,1,P.sep,1);
    // section tabs: jump straight to a section (the sections work like an accordion)

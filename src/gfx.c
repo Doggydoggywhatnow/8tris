@@ -35,7 +35,7 @@ static inline void blend_row(u32*p,int n,u32 c,unsigned aa,unsigned ia){
    for(;i<n;i++){u32 d=p[i];p[i]=0xFF000000u|((((d&0xFF00FFu)*ia+srb)>>8)&0xFF00FFu)|((((d&0xFF00u)*ia+sg)>>8)&0xFF00u);}}
 }
 static void fill_rect(double xf,double yf,double wf,double hf,u32 c,double alpha){
-  int x=(int)floor(xf+.5),y=(int)floor(yf+.5),w=(int)floor(xf+wf+.5)-x,h=(int)floor(yf+hf+.5)-y;
+  int x=ifloor(xf+.5),y=ifloor(yf+.5),w=ifloor(xf+wf+.5)-x,h=ifloor(yf+hf+.5)-y;
   int a=A255(alpha),x0=imax(x,CX0),y0=imax(y,CY0),x1=imin(x+w,CX1),y1=imin(y+h,CY1),i,j;
   if(a<=0||x1<=x0||y1<=y0)return;
   if(a>=255){for(j=y0;j<y1;j++){u32*p=&FB[j*FW];for(i=x0;i<x1;i++)p[i]=c;}return;}
@@ -54,9 +54,9 @@ static void glow_rect(double x,double y,double w,double h,double blur,double spr
   for(i=0;i<n;i++){double k=1.0-(double)i/n;border_out(x-spread-i,y-spread-i,w+2*(spread+i),h+2*(spread+i),1,c,a*k*k*.6);}
 }
 static void fill_ring(double cx,double cy,double R,double lw,u32 c,double alpha){
-  double Ro=R+lw/2,Ri=imax(0,R-lw/2);int a=A255(alpha),y,y0=(int)floor(cy-Ro),y1=(int)ceil(cy+Ro);
+  double Ro=R+lw/2,Ri=imax(0,R-lw/2);int a=A255(alpha),y,y0=ifloor(cy-Ro),y1=iceil(cy+Ro);
   for(y=imax(y0,CY0);y<imin(y1,CY1);y++){double dy=y+.5-cy,o=Ro*Ro-dy*dy;if(o<=0)continue;double xo=sqrt(o),xi=Ri*Ri-dy*dy>0?sqrt(Ri*Ri-dy*dy):0;
-    int xa=(int)floor(cx-xo),xb=(int)ceil(cx-xi),xc=(int)floor(cx+xi),xd=(int)ceil(cx+xo),x;
+    int xa=ifloor(cx-xo),xb=iceil(cx-xi),xc=ifloor(cx+xi),xd=iceil(cx+xo),x;
     if(xi<=0){for(x=xa;x<xd;x++)putpx(x,y,c,a);}else{for(x=xa;x<xb;x++)putpx(x,y,c,a);for(x=xc;x<xd;x++)putpx(x,y,c,a);}}
 }
 
@@ -93,15 +93,15 @@ static int utf8_next(const char**s){
 }
 // f: 0 regular, 1 bold. sz in pixels.
 static double text_w(int f,double sz,const char*s){
-  f=face_of(f);int isz=imax(4,(int)floor(sz+.5));double w=0;
+  f=face_of(f);int isz=imax(4,ifloor(sz+.5));double w=0;
   while(*s){int cp=utf8_next(&s);w+=glyph(f,isz,cp)->adv;}return w;
 }
-static void text_ascent(int f,double sz,double*asc,double*desc){f=face_of(f);font_init(f);float sc=stbtt_ScaleForMappingEmToPixels(&FI[f],(float)imax(4,(int)floor(sz+.5)));int a,d,g;stbtt_GetFontVMetrics(&FI[f],&a,&d,&g);*asc=a*sc;*desc=d*sc;}
+static void text_ascent(int f,double sz,double*asc,double*desc){f=face_of(f);font_init(f);float sc=stbtt_ScaleForMappingEmToPixels(&FI[f],(float)imax(4,ifloor(sz+.5)));int a,d,g;stbtt_GetFontVMetrics(&FI[f],&a,&d,&g);*asc=a*sc;*desc=d*sc;}
 // Draws with the left end at x and the text baseline at y.
 static void text_at(int f,double sz,double x,double y,u32 c,double alpha,const char*s){
-  f=face_of(f);int isz=imax(4,(int)floor(sz+.5)),a0=A255(alpha),ix=(int)floor(x+.5),iy=(int)floor(y+.5);double pen=0;
+  f=face_of(f);int isz=imax(4,ifloor(sz+.5)),a0=A255(alpha),ix=ifloor(x+.5),iy=ifloor(y+.5);double pen=0;
   while(*s){int cp=utf8_next(&s);Gl*g=glyph(f,isz,cp);
-    if(g->bmp){int gx=ix+(int)floor(pen+.5)+g->xo,gy=iy+g->yo,i,j;
+    if(g->bmp){int gx=ix+ifloor(pen+.5)+g->xo,gy=iy+g->yo,i,j;
       for(j=0;j<g->h;j++){int yy=gy+j;if(yy<CY0||yy>=CY1)continue;for(i=0;i<g->w;i++){int xx=gx+i;if(xx<CX0||xx>=CX1)continue;int a=g->bmp[j*g->w+i];if(a)putpx(xx,yy,c,a*a0/255);}}}
     pen+=g->adv;}
 }

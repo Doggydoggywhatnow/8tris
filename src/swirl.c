@@ -33,23 +33,27 @@ static u32 sw_col(double t){if(!sw_ready)swirl_init();t-=floor(t);return SWL[((i
 
 // ---- Shapes (all anti-aliased) ----
 static void disc(double cx,double cy,double R,u32 c,double alpha){
-  int x0=imax((int)floor(cx-R-1),CX0),x1=imin((int)ceil(cx+R+1),CX1),y0=imax((int)floor(cy-R-1),CY0),y1=imin((int)ceil(cy+R+1),CY1),x,y;
-  double inner=R-.5,in2=inner>0?inner*inner:-1,out=R+.5,out2=out*out;int a255=A255(alpha);
-  for(y=y0;y<y1;y++){double dy=y+.5-cy;for(x=x0;x<x1;x++){double dx=x+.5-cx,d2=dx*dx+dy*dy;
-    if(d2<=in2){putpx(x,y,c,a255);continue;}                       // fully inside
-    if(d2>=out2)continue;                                           // fully outside
-    putpx(x,y,c,A255(alpha*(R-sqrt(d2)+.5)));}}                     // on the edge
+  int a255=A255(alpha);if(a255<=0)return;                            // nothing would be drawn: edge pixels are never more opaque than the middle
+  int y0=imax(ifloor(cy-R-1),CY0),y1=imin(iceil(cy+R+1),CY1),y;
+  double inner=R-.5,in2=inner>0?inner*inner:-1,out=R+.5,out2=out*out;
+  for(y=y0;y<y1;y++){double dy=y+.5-cy,o=out2-dy*dy;if(o<=0)continue;
+    // Only the stretch of this row that can touch the disc is visited (the exact tests below decide each pixel).
+    double sq=sqrt(o);int xa=imax(ifloor(cx-.5-sq),CX0),xb=imin(iceil(cx-.5+sq),CX1),x;u32*row=&FB[(size_t)y*FW];
+    for(x=xa;x<xb;x++){double dx=x+.5-cx,d2=dx*dx+dy*dy;
+      if(d2<=in2){row[x]=a255>=255?c:blend(row[x],c,a255);continue;}   // fully inside
+      if(d2>=out2)continue;                                           // fully outside
+      int a=A255(alpha*(R-sqrt(d2)+.5));if(a>0)row[x]=a>=255?c:blend(row[x],c,a);}}   // on the edge
 }
 // A ring. Only the pixels near the ring itself are visited, so a big ring is cheap.
 static void ring_aa(double cx,double cy,double R,double lw,u32 c,double alpha){
-  double Ro=R+lw/2+1,Ri=dmax(0,R-lw/2-1);int y0=imax((int)floor(cy-Ro),CY0),y1=imin((int)ceil(cy+Ro),CY1),y;
+  double Ro=R+lw/2+1,Ri=dmax(0,R-lw/2-1);int y0=imax(ifloor(cy-Ro),CY0),y1=imin(iceil(cy+Ro),CY1),y;
   for(y=y0;y<y1;y++){double dy=y+.5-cy,o=Ro*Ro-dy*dy;if(o<=0)continue;double xo=sqrt(o),i2=Ri*Ri-dy*dy,xi=i2>0?sqrt(i2):0;int pass,x;
-    for(pass=0;pass<2;pass++){int xa,xb;if(xi<=0){if(pass)break;xa=(int)floor(cx-xo);xb=(int)ceil(cx+xo);}else if(!pass){xa=(int)floor(cx-xo);xb=(int)ceil(cx-xi);}else{xa=(int)floor(cx+xi);xb=(int)ceil(cx+xo);}
+    for(pass=0;pass<2;pass++){int xa,xb;if(xi<=0){if(pass)break;xa=ifloor(cx-xo);xb=iceil(cx+xo);}else if(!pass){xa=ifloor(cx-xo);xb=iceil(cx-xi);}else{xa=ifloor(cx+xi);xb=iceil(cx+xo);}
       xa=imax(xa,CX0);xb=imin(xb,CX1);
       for(x=xa;x<xb;x++){double dx=x+.5-cx,cv=lw/2-fabs(sqrt(dx*dx+dy*dy)-R)+.5;if(cv<=0)continue;putpx(x,y,c,A255(alpha*(cv>1?1:cv)));}}}
 }
 // A point at a fractional x, split over the two pixels it overlaps.
-static void aa_px(double x,double y,u32 c,double a){int ix=(int)floor(x);double f=x-ix;putpx(ix,(int)floor(y),c,A255(a*(1-f)));putpx(ix+1,(int)floor(y),c,A255(a*f));}
+static void aa_px(double x,double y,u32 c,double a){int ix=ifloor(x);double f=x-ix;putpx(ix,ifloor(y),c,A255(a*(1-f)));putpx(ix+1,ifloor(y),c,A255(a*f));}
 
 // ---- The flowing field that colors the backgrounds ----
 // A gently warped spiral. Low spatial frequency on purpose, so it stays smooth.
@@ -57,28 +61,54 @@ static double sw_field(double x,double y,double t){
   double u=x+.4*fsin(y*1.5+t*.0006),w=y+.4*fsin(u*1.3-t*.0005),r=sqrt(u*u+w*w),a=atan2(w,u);
   return a*(2/6.2831853)+r*.7-t*.0001+.3*fsin(r*2.8-t*.0007);
 }
-static const u8 BAYER[16]={0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5};
+// 4x4 ordered-dither offsets (Bayer matrix * 16 - 120), one row per (y & 3), written twice so a 4-wide load can start at any (x & 3).
+static const int DITHER[4][8]={{-120,8,-88,40,-120,8,-88,40},{72,-56,104,-24,72,-56,104,-24},{-72,56,-104,24,-72,56,-104,24},{120,-8,88,-40,120,-8,88,-40}};
 #define GMAX 4096                                  // most grid points across one row
 
+// Exact n / d (truncating toward zero) for |n| < 2^20 as a multiply: m = 2^40 / d + 1 (d is the same for a whole image, and divides are slow).
+static inline int qdiv(int n,unsigned long long m){int sg=n>>31;unsigned long long a=(unsigned)((n^sg)-sg);int q=(int)((a*m)>>40);return (q^sg)-sg;}   // branch-free: divide |n|, then restore the sign
+
 // Renders cell rows [gy0,gy1) of the field into dst (w x h pixels). Safe to run on the worker thread (it only touches its own arguments). The field is sampled on a coarse grid (one sample per `cell` pixels)
-// and blended smoothly in between in 8.8 fixed point, with a tiny ordered dither so slow gradients show no banding.
+// and blended smoothly in between in 8.8 fixed point, with a tiny ordered dither so slow gradients show no banding. Four pixels are blended at a time with SSE2 where available.
 static void swirl_rows(u32*dst,int w,int h,int cell,double t,double dark,int gy0,int gy1){
   u32 GR[2][GMAX];                                  // two rows of field samples
+  int VR[GMAX],VG[GMAX],VB[GMAX];                   // one pixel row's samples after the vertical blend (8.8 fixed point); a cell's right edge is the next cell's left edge
+  int FYT[256];                                     // vertical blend weight of each row inside a cell
   int gw=(w+cell-1)/cell+1,gx,gy,i,j,cur=0;double sc=dmax(w,h)/2.0,k=1.5/sc;
+  const unsigned long long M=(1ULL<<40)/(unsigned)cell+1;
+  for(j=0;j<cell&&j<256;j++)FYT[j]=j*256/cell;
   for(gx=0;gx<gw;gx++)GR[0][gx]=darken(sw_col(sw_field((gx*cell-w/2.0)*k,(gy0*cell-h/2.0)*k,t)),dark);
   for(gy=gy0;gy<gy1;gy++){
     u32*top=GR[cur],*bot=GR[cur^1];
     for(gx=0;gx<gw;gx++)bot[gx]=darken(sw_col(sw_field((gx*cell-w/2.0)*k,((gy+1)*cell-h/2.0)*k,t)),dark);
-    for(gx=0;gx<gw-1;gx++){
-      u32 c00=top[gx],c10=top[gx+1],c01=bot[gx],c11=bot[gx+1];
-      for(j=0;j<cell;j++){int py=gy*cell+j;if(py>=h)break;int fy=j*256/cell;
-        int lr=(int)((c00>>16)&255)*256+((int)((c01>>16)&255)-(int)((c00>>16)&255))*fy,lg=(int)((c00>>8)&255)*256+((int)((c01>>8)&255)-(int)((c00>>8)&255))*fy,lb=(int)(c00&255)*256+((int)(c01&255)-(int)(c00&255))*fy;
-        int rr=(int)((c10>>16)&255)*256+((int)((c11>>16)&255)-(int)((c10>>16)&255))*fy,rg=(int)((c10>>8)&255)*256+((int)((c11>>8)&255)-(int)((c10>>8)&255))*fy,rb=(int)(c10&255)*256+((int)(c11&255)-(int)(c10&255))*fy;
-        int sr=(rr-lr)/cell,sg=(rg-lg)/cell,sb=(rb-lb)/cell;u32*row=&dst[py*w];const u8*bay=&BAYER[(py&3)*4];
-        for(i=0;i<cell;i++){int px=gx*cell+i;if(px>=w)break;int dt=bay[px&3]*16-120;
+    for(j=0;j<cell;j++){int py=gy*cell+j;if(py>=h)break;int fy=j<256?FYT[j]:j*256/cell;
+      for(gx=0;gx<gw;gx++){u32 a=top[gx],b=bot[gx];
+        VR[gx]=(int)((a>>16)&255)*256+((int)((b>>16)&255)-(int)((a>>16)&255))*fy;
+        VG[gx]=(int)((a>>8)&255)*256+((int)((b>>8)&255)-(int)((a>>8)&255))*fy;
+        VB[gx]=(int)(a&255)*256+((int)(b&255)-(int)(a&255))*fy;}
+      const int*dtr=DITHER[py&3];
+      for(gx=0;gx<gw-1;gx++){
+        int px0=gx*cell,n=imin(cell,w-px0),lr=VR[gx],lg=VG[gx],lb=VB[gx];
+        int sr=qdiv(VR[gx+1]-lr,M),sg=qdiv(VG[gx+1]-lg,M),sb=qdiv(VB[gx+1]-lb,M);u32*row=&dst[(size_t)py*w+px0];
+#ifdef __SSE2__
+        {__m128i vr=_mm_set_epi32(lr+3*sr,lr+2*sr,lr+sr,lr),vg=_mm_set_epi32(lg+3*sg,lg+2*sg,lg+sg,lg),vb=_mm_set_epi32(lb+3*sb,lb+2*sb,lb+sb,lb);
+         const __m128i s4r=_mm_set1_epi32(4*sr),s4g=_mm_set1_epi32(4*sg),s4b=_mm_set1_epi32(4*sb),ff=_mm_set1_epi8((char)0xFF);
+         for(i=0;i<n;i+=4){
+           __m128i dt=_mm_loadu_si128((const __m128i*)(dtr+((px0+i)&3)));
+           // >>8 then clamp to 0..255: the saturating packs (32->16->8 bit) do the clamp
+           __m128i r=_mm_srai_epi32(_mm_add_epi32(vr,dt),8),g=_mm_srai_epi32(_mm_add_epi32(vg,dt),8),b=_mm_srai_epi32(_mm_add_epi32(vb,dt),8);
+           r=_mm_packus_epi16(_mm_packs_epi32(r,r),r);g=_mm_packus_epi16(_mm_packs_epi32(g,g),g);b=_mm_packus_epi16(_mm_packs_epi32(b,b),b);
+           __m128i px=_mm_unpacklo_epi16(_mm_unpacklo_epi8(b,g),_mm_unpacklo_epi8(r,ff));   // b g r ff for four pixels = four ARGB words
+           // A store that runs past this cell lands on the next cell's pixels, which are written afterwards; only at the end of the row is it trimmed.
+           if(px0+i+4<=w)_mm_storeu_si128((__m128i*)(row+i),px);else{u32 tmp[4];_mm_storeu_si128((__m128i*)tmp,px);memcpy(row+i,tmp,(size_t)(n-i)*4);}
+           vr=_mm_add_epi32(vr,s4r);vg=_mm_add_epi32(vg,s4g);vb=_mm_add_epi32(vb,s4b);}}
+#else
+        for(i=0;i<n;i++){int dt=dtr[(px0+i)&3];
           int r=(lr+sr*i+dt)>>8,g=(lg+sg*i+dt)>>8,b=(lb+sb*i+dt)>>8;
           r=r<0?0:r>255?255:r;g=g<0?0:g>255?255:g;b=b<0?0:b>255?255:b;
-          row[px]=RGB(r,g,b);}}
+          row[i]=RGB(r,g,b);}
+#endif
+      }
     }
     cur^=1;
   }
@@ -102,7 +132,7 @@ static void sw_worker(void*arg){
   }
 }
 static void swirl_fill(int slot,double rx,double ry,double rw,double rh,int cell,double t,double dark,double every){
-  int x0=(int)floor(rx),y0=(int)floor(ry),w=(int)ceil(rw),h=(int)ceil(rh),j;if(w<1||h<1)return;
+  int x0=ifloor(rx),y0=ifloor(ry),w=iceil(rw),h=iceil(rh),j;if(w<1||h<1)return;
   if(!sw_ready)swirl_init();                                         // the worker reads the palette, so build it before it can start
   // Big areas use bigger cells: the field is smooth, so this is invisible but several times cheaper at high resolutions.
   cell=imax(cell,imin(w,h)/110);while((w+cell-1)/cell+1>GMAX)cell++;
@@ -158,7 +188,7 @@ static Spr* spr_get(int ci,int s,int ph){
   int key=((ci&63)*8192+s)*64+ph+1;unsigned h=(unsigned)key*2654435761u;int i=(int)(h%NSPR),n;
   for(n=0;n<NSPR;n++,i=(i+1)%NSPR){if(SPR[i].key==key)return &SPR[i];if(!SPR[i].key)break;}
   if(spr_count>NSPR*3/4||spr_bytes>96L*1024*1024){spr_clear();i=(int)(h%NSPR);}
-  int sz=(int)ceil(s*1.12)+3;u32*a=(u32*)calloc((size_t)sz*sz,4),*m=(u32*)calloc((size_t)sz*sz,4);if(!a||!m){free(a);free(m);return NULL;}
+  int sz=iceil(s*1.12)+3;u32*a=(u32*)calloc((size_t)sz*sz,4),*m=(u32*)calloc((size_t)sz*sz,4);if(!a||!m){free(a);free(m);return NULL;}
   // Render the color layer and a silhouette mask into scratch buffers, then combine them into premultiplied ARGB.
   u32*sFB=FB;int sFW=FW,sFH=FH,c0=CX0,c1=CX1,r0=CY0,r1=CY1;
   gfx_target(a,sz,sz);swirl_block_raw(sz/2.0,sz/2.0,s,ci,ph*6.2831853/SPIN_STEPS);
@@ -169,10 +199,10 @@ static Spr* spr_get(int ci,int s,int ph){
 }
 // gx, gy vary the spin from block to block; t (ms) drives the spin.
 static void swirl_block(double x,double y,double s,int ci,double t,int gx,int gy){
-  int is=imax(2,(int)floor(s+.5));double rot=t*.0012+(gx*13+gy*7)*.9;
-  int ph=(int)floor(fmod(fmod(rot,6.2831853)+6.2831853,6.2831853)/6.2831853*SPIN_STEPS)%SPIN_STEPS;if(is<9)ph=0;
+  int is=imax(2,ifloor(s+.5));double rot=t*.0012+(gx*13+gy*7)*.9;
+  int ph=ifloor(fmod(fmod(rot,6.2831853)+6.2831853,6.2831853)/6.2831853*SPIN_STEPS)%SPIN_STEPS;if(is<9)ph=0;
   Spr*sp=spr_get(ci,is,ph);if(!sp)return;
-  int sz=sp->sz,ox=(int)floor(x+s/2-sz/2.0+.5),oy=(int)floor(y+s/2-sz/2.0+.5),i,j;
+  int sz=sp->sz,ox=ifloor(x+s/2-sz/2.0+.5),oy=ifloor(y+s/2-sz/2.0+.5),i,j;
   for(j=0;j<sz;j++){int py=oy+j;if(py<CY0||py>=CY1)continue;
     for(i=0;i<sz;i++){int px=ox+i;if(px<CX0||px>=CX1)continue;u32 p=sp->px[j*sz+i];unsigned a=p>>24;if(!a)continue;u32*d=&FB[py*FW+px];
       if(a>=255)*d=p|0xFF000000u;                                    // premultiplied: result = sprite + destination * (1 - alpha)

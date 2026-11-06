@@ -25,7 +25,7 @@ static int song_repdigit(int k){if(k<11)return 0;int d=k%10;while(k){if(k%10!=d)
 static SongMode song_mode(int c){SongMode m;m.major=(c>=70&&c<80)||(c>=770&&c<780);m.sc=m.major?SC_MAJOR:SC_MINOR;
   int k=2*(c/50);if(c>=100)k+=1;m.key=k%12;if(m.key>6)m.key-=12;return m;}
 // Frequency of a scale degree (any integer; 7 = one octave up) in the song's key. Degree 0 at octave 0 is A2 (110 Hz).
-static double song_f(const SongMode*m,int deg,int oct){int o=(int)floor(deg/7.0);int d=deg-o*7;return 110.0*pow(2,(m->sc[d]+12*(o+oct)+m->key)/12.0);}
+static double song_f(const SongMode*m,int deg,int oct){int o=ifloor(deg/7.0);int d=deg-o*7;return 110.0*pow(2,(m->sc[d]+12*(o+oct)+m->key)/12.0);}
 static int song_chord(int c,long bar){if((c>=70&&c<80)||(c>=770&&c<780))return PROG_MAJ[bar%4];int sec=c<30?0:(int)((c/10+bar/8)%4);return PROG[sec][bar%4];}
 
 // Stereo position for the next notes: -1 left, 0 middle, 1 right (equal-power pan).
@@ -85,7 +85,7 @@ static void song_step_play(long step,i64 at,int c){
 // The scale degree (relative to the key, 0 = tonic) of the note combo k adds. A smooth, always-changing contour that wanders about two
 // octaves around the tonic, so successive notes are close together and form a tune. On strong beats it lands on a tone of the current
 // chord (root, third or fifth, 'root' being the chord's scale degree). The same chain always plays the same tune.
-static int song_contour(int k){return(int)floor(4.0*sin(k*.37)+2.5*sin(k*.91+1.0)-1.0+.5);}
+static int song_contour(int k){return ifloor(4.0*sin(k*.37)+2.5*sin(k*.91+1.0)-1.0+.5);}
 static int song_tick_deg(int k,int root,int strong,int last){   // 'last' is the note just played: a note is never repeated
   int d=song_contour(k);
   if(d==last)d+=(k%2)?1:-1;
