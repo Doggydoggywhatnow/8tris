@@ -6,7 +6,7 @@ static void run(int n){int i;for(i=0;i<n;i++){t+=16.7;app_frame(t,fb);}}
 static void click(int x,int y){app_mouse_move(x,y);run(1);app_mouse_button(x,y,1);run(1);app_mouse_button(x,y,0);run(1);}
 #define CHECK(c) do{if(!(c)){printf("FAIL line %d: %s\n",__LINE__,#c);bad++;}}while(0)
 int main(void){
-  int bad=0;fb=calloc(w*h,4);system("mkdir -p /tmp/8tris-test-pref");
+  int bad=0;fb=calloc(w*h,4);system("mkdir -p /tmp/8tris-test-pref");remove("/tmp/8tris-test-pref/settings.txt");   /* start from the defaults every time */
   app_init();app_resize(w,h);run(30);
   click(960,700);run(2);CHECK(menu==1);                       // Settings button
   click(590,241);CHECK(focus_id!=0);                          // Width field (Game open by default, first row)

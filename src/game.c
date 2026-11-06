@@ -8,7 +8,7 @@ static double NOW=0;                        // current time in ms, set once per 
 static const u32 COL[10]={0xFF2fb8c9,0xFFe8b92e,0xFF9a5fd1,0xFF4bb86a,0xFFe2554f,0xFF3f6fd8,0xFFee8a3c,0xFFd95fa8,0xFF8bc34a,0xFFa1887f};
 
 // ---- Polyominoes (rotations are the same piece, mirror images are different), built on demand one block at a time ----
-static Def*LVd[11];static int LVn[11];static int LVcap[11];
+static Def*LVd[11];static int LVn[11];
 static void norm_cells(int n,int*r,int*c){
   int mr=1000,mc=1000,i,j;
   for(i=0;i<n;i++){if(r[i]<mr)mr=r[i];if(c[i]<mc)mc=c[i];}
@@ -86,11 +86,11 @@ static int tname(Def*d){
 static int tCustom(void){int i;for(i=1;i<7;i++)if(tw[i]!=tw[0])return 1;return 0;}
 
 // ---- Board and run state ----
-static u8*board=NULL;static Piece p;static Def**queue_=NULL;static Def*holds[10];static int sel=0,canHold=1;
+static u8*board=NULL;static Piece p;static Def*holds[10];static int sel=0,canHold=1;
 static double score=0;static int lines=0,level=1,over=0,paused=0,menu=0;static double acc=0,last_t=0;
 static int dir=0,hl=0,hr=0,sd=0;static double mt=0,st=0,lockT=0;static int resets=0,low=0,b2b=0;
 static double fallV=22;   // fall rate position: rate = 0.2 * 100^(fallV/100) rows/s; the slider covers 0..100, a typed rate may lie outside
-static int lvlSys=0,sdRate=22,ovPlayed=0,quiet=0,clearOn=1,cellsCleared=0,pieces=0,maxCombo=0,runDirty=0,saved=0;static double playMs=0,vol_=0.5;
+static int lvlSys=0,sdRate=22,ovPlayed=0,quiet=0,clearOn=1,cellsCleared=0,pieces=0,maxCombo=0,runDirty=0,saved=0;static double playMs=0;
 static int usable[12],nusable=0;static Def**lists[12];static int nlists[12];static Def**bags[12];static int nbag[12],bagpos[12];
 static int combo=0;                       // current combo count (lives here because lock() uses it; effects only read it)
 #define QMAX 16

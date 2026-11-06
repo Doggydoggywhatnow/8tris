@@ -65,7 +65,7 @@ typedef struct{int f,sz,cp,w,h,xo,yo;float adv;u8*bmp;int used;}Gl;
 // Faces are numbered family*4 + (bold) + 2*(italic). The game always uses family 0 (DejaVu Sans): f=0 regular, f=1 bold.
 // The settings menu can switch on fctx_on, which maps every text call to the chosen family, bold and italic instead.
 #define NFACE 28
-static stbtt_fontinfo FI[NFACE];static unsigned char face_ok[NFACE];static int font_ready=1;
+static stbtt_fontinfo FI[NFACE];static unsigned char face_ok[NFACE];
 static int fctx_on=0,fctx_fam=0,fctx_bold=0,fctx_ital=0;
 static int face_of(int f){if(!fctx_on)return f&1;return fctx_fam*4+((f||fctx_bold)?1:0)+(fctx_ital?2:0);}
 #define GCN 4096

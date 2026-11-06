@@ -2,6 +2,21 @@
 
 Versions are `major.minor.patch`. Until about ten changes have built up, new features are shipped as patch releases, so a patch number here can include features. This file is the real record of what changed.
 
+## 0.7.3
+Saving, privacy and a code audit. No features were removed.
+- **History is now a plain text file** (`history.txt`, one run per line). Older and newer versions can read each other's history: unknown details are skipped and missing ones are left blank, instead of the whole history being ignored. The old `history.bin` is converted on first launch, checked, and then removed, so "Clear history" really clears everything.
+- **Crash-safe saving:** preferences, history and history exports are written to a temporary file and swapped in with one rename, so a crash or power cut can no longer leave a half-written file.
+- **Windows:** the data folder moved from `%APPDATA%\8tris` (which can be synced to a server on work and school networks) to `%LOCALAPPDATA%\8tris`, which stays on this computer. The old folder, music included, is moved over once on first launch.
+- **Linux:** the data folder is now readable only by your own account (it was readable by other accounts on the same computer).
+- **Linux AppImage runs on older systems:** it now uses the system's SDL2 when there is one, and the game itself needs glibc 2.34 instead of 2.38 (it falls back to its bundled libraries otherwise).
+- `--selftest` no longer adds a test game to your history or reads your preferences.
+- Fixed: a rare timing race could start a sound before it was fully set up, which could silence all sound until restart. Sound also can no longer be stuck silent by a single bad sample.
+- Fixed: four dropdowns could lose your choice: Window size, the clock's UTC minutes, the music Track, and the History date offset minutes. They handed the menu a value that no longer existed by the time your click was applied. New test: `test/dropdowns.c`.
+- Fixed: music files whose names contain control characters (such as a line break) are skipped instead of risking the preferences file.
+- Faster: sound synthesis is about 3 times cheaper (same output), and the Wild theme takes about 40% less time to draw at 1080p.
+- Preferences are now written at most a few times per second while you drag a slider (before: every frame), and right away when the menu closes.
+- Trimmed: unused variables, duplicated lists of font and position names, a leftover debug test, and the old downloads (0.6.5 to 0.7.1). Test programs that no longer built were fixed. New test: `test/histfmt.c`. The click test now always starts from default preferences.
+
 ## 0.7.2
 - Repository only, no new program build (the 0.7.1 downloads are still the current ones): added `.gitattributes` so GitHub shows 8tris as the C program it is. Header files were being counted as C++, and bundled third-party libraries and generated font data are now marked as vendored and generated.
 

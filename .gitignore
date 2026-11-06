@@ -4,3 +4,5 @@
 *.squashfs
 gmon.out
 /*.AppImage
+test/*
+!test/*.c

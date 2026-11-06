@@ -1,5 +1,5 @@
 // ===== APPLICATION GLUE: layout, page and side panel, input routing =====
-static int WW=900,WH=700,focused=1,winW=900,winH=700,last_res=-1;static double prev_t=-1;   // WW,WH: the size the game draws at; winW,winH: the window
+static int WW=900,WH=700,winW=900,winH=700,last_res=-1;static double prev_t=-1;   // WW,WH: the size the game draws at; winW,winH: the window
 static u32*RB=NULL;
 static float*ANG=NULL;static int AW=0,AH=0;
 
@@ -25,10 +25,13 @@ static void wild_page(double now){
   static const u32 sb[6]={HEX(0x00e5ff),HEX(0xd500f9),HEX(0xff0080),HEX(0xffee00),HEX(0x00e676),HEX(0x00e5ff)};
   static u32 la[360],lb[360];static int ready=0;if(!ready){cone_lut(la,sa,8);cone_lut(lb,sb,6);ready=1;}
   double t=tm(now);int ra=(int)fmod(t/22000.0*360,360),rb=(int)fmod(t/14000.0*360,360),bx,by,i,j;
-  for(by=0;by<AH;by++)for(bx=0;bx<AW;bx++){
-    int d=(int)ANG[by*AW+bx];int ia=((d+ra)%360+360)%360,ib=((360-d+rb)%360+360)%360;u32 a=la[ia],b=lb[ib];
-    u32 c=RGB((((a>>16)&255)+((b>>16)&255))/2,(((a>>8)&255)+((b>>8)&255))/2,((a&255)+(b&255))/2);
-    int x0=bx*4,y0=by*4;for(j=0;j<4&&y0+j<WH;j++)for(i=0;i<4&&x0+i<WW;i++)FB[(y0+j)*FW+x0+i]=c;}
+  // One row of 4x4 blocks is colored once, then copied to its four pixel rows.
+  (void)i;for(by=0;by<AH;by++){int y0=by*4;if(y0>=WH)break;u32*row=FB+(size_t)y0*FW;
+    for(bx=0;bx<AW;bx++){int x0=bx*4;if(x0>=WW)break;
+      int d=(int)ANG[by*AW+bx];int ia=((d+ra)%360+360)%360,ib=((360-d+rb)%360+360)%360;u32 a=la[ia],b=lb[ib];
+      u32 c=RGB((((a>>16)&255)+((b>>16)&255))/2,(((a>>8)&255)+((b>>8)&255))/2,((a&255)+(b&255))/2);
+      int e=imin(4,WW-x0);for(j=0;j<e;j++)row[x0+j]=c;}
+    for(j=1;j<4&&y0+j<WH;j++)memcpy(FB+(size_t)(y0+j)*FW,row,sizeof(u32)*(size_t)WW);}
 }
 // ---- Side strip: held pieces, next pieces and the Preferences button ----
 static int stripX(void){return WW-80;}
@@ -164,7 +167,7 @@ static void draw_clocks(void){
       if(pos==6)y0=WH-8-30-10-H;else y0=top?m:WH-m-H;
       for(i=0;i<k;i++){ClkBox*c=&b[mem[i]];double x=pos==6?stW+(80-c->w)/2:col==0?m:col==1?(stW-c->w)/2:stW-m-c->w;clk_draw(mem[i],c,x,y0);y0+=c->h+gap_v;}
     }else{
-      double G=gap_h,hm=0,x0,y0;for(i=0;i<k;i++){G+=b[mem[i]].w;if(b[mem[i]].h>hm)hm=b[mem[i]].h;}G-=gap_h*(k==1);if(k==2)G+=0;
+      double G=gap_h,hm=0,x0,y0;for(i=0;i<k;i++){G+=b[mem[i]].w;if(b[mem[i]].h>hm)hm=b[mem[i]].h;}G-=gap_h*(k==1);
       x0=col==0?m:col==1?(stW-G)/2:stW-m-G;y0=top?m:WH-m-hm;
       for(i=0;i<k;i++){ClkBox*c=&b[mem[i]];clk_draw(mem[i],c,x0,y0+(hm-c->h)/2);x0+=c->w+gap_h;}
     }
@@ -234,7 +237,7 @@ void app_frame(double now,u32*fb){
 // ---- Built-in smoke test: `8tris --selftest` plays a scripted game with the menu and effects, mixes audio, and checks the output. ----
 int app_selftest(void){
   static float au[2*1024];u32*fb=NULL;int i,bad=0,fw=0,fh=0;double t=1000,peak=0;long lit=0;
-  app_init();app_resize(800,600);resSet=0;
+  store_off=1;app_init();app_resize(800,600);resSet=0;
   for(i=0;i<400;i++){t+=16.7;if(i%9==0){app_key('d',1,0);app_key('d',0,0);}if(i%13==0){app_key('j',1,0);app_key('j',0,0);}if(i%31==0){app_key(' ',1,0);app_key(' ',0,0);}fb=app_render(t,&fw,&fh);app_audio(au,1024);}
   app_key(K_ESC,1,0);app_key(K_ESC,0,0);for(i=0;i<20;i++){t+=16.7;fb=app_render(t,&fw,&fh);}
   if(!menu){printf("FAIL: Esc did not open preferences\n");bad++;}

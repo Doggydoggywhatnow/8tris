@@ -157,7 +157,8 @@ static volatile int mus_job=0;static int16_t*job_buf=NULL;static i64 job_len=0;s
 
 
 static const char* music_dir(void){static char d[700];snprintf(d,sizeof d,"%smusic",plat_pref_dir());return d;}
-static int music_ext_ok(const char*n){const char*e=strrchr(n,'.');if(!e)return 0;char x[8];int i;for(i=0;e[i+1]&&i<6;i++)x[i]=(char)tolower((unsigned char)e[i+1]);x[i]=0;if(e[i+1])return 0;return !strcmp(x,"mp3")||!strcmp(x,"ogg")||!strcmp(x,"wav")||!strcmp(x,"flac");}
+static int music_ext_ok(const char*n){{const unsigned char*q=(const unsigned char*)n;for(;*q;q++)if(*q<32||*q==127)return 0;}   // no control characters in names
+  const char*e=strrchr(n,'.');if(!e)return 0;char x[8];int i;for(i=0;e[i+1]&&i<6;i++)x[i]=(char)tolower((unsigned char)e[i+1]);x[i]=0;if(e[i+1])return 0;return !strcmp(x,"mp3")||!strcmp(x,"ogg")||!strcmp(x,"wav")||!strcmp(x,"flac");}
 static int music_cmp(const void*a,const void*b){const char*x=(const char*)a,*y=(const char*)b;for(;*x&&*y;x++,y++){int d=tolower((unsigned char)*x)-tolower((unsigned char)*y);if(d)return d;}return tolower((unsigned char)*x)-tolower((unsigned char)*y);}
 // Lists the music folder (creating it if needed) and keeps the chosen track selected by name.
 static void music_scan(void){
@@ -167,7 +168,7 @@ static void music_scan(void){
   {char pat[720];snprintf(pat,sizeof pat,"%s\\*",dir);WIN32_FIND_DATAA fd;HANDLE h=FindFirstFileA(pat,&fd);
    if(h!=INVALID_HANDLE_VALUE){do{if(!(fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)&&fd.cFileName[0]!='.'&&strlen(fd.cFileName)<255&&music_ext_ok(fd.cFileName)&&nmfiles<MUS_MAXFILES)snprintf(mfiles[nmfiles++],256,"%s",fd.cFileName);}while(FindNextFileA(h,&fd));FindClose(h);}}
 #else
-  mkdir(dir,0755);
+  mkdir(dir,0700);
   {DIR*d=opendir(dir);struct dirent*e;if(d){while((e=readdir(d))&&nmfiles<MUS_MAXFILES){if(e->d_name[0]=='.'||strlen(e->d_name)>=255||!music_ext_ok(e->d_name))continue;snprintf(mfiles[nmfiles++],256,"%s",e->d_name);}closedir(d);}}
 #endif
   qsort(mfiles,nmfiles,256,music_cmp);

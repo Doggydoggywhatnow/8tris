@@ -1,6 +1,5 @@
 // Linux window, input and audio through SDL2. SDL is only used for the window surface, key/mouse events and the audio device.
 #include <SDL2/SDL.h>
-#include <sys/stat.h>
 #include "8tris.c"
 static SDL_mutex*mtx;
 void plat_lock(void){if(mtx)SDL_LockMutex(mtx);}
@@ -13,7 +12,8 @@ static char prefdir[600],homedir[600];
 const char* plat_pref_dir(void){
   if(!prefdir[0]){const char*x=getenv("XDG_DATA_HOME"),*h=getenv("HOME");char d[560];
     if(x&&*x)snprintf(d,sizeof d,"%s",x);else snprintf(d,sizeof d,"%s/.local/share",h?h:"/tmp");
-    char a[600];snprintf(a,sizeof a,"%s",d);mkdir(a,0755);snprintf(prefdir,sizeof prefdir,"%s/8tris/",d);mkdir(prefdir,0755);}
+    char a[600];snprintf(a,sizeof a,"%s",d);mkdir(a,0755);snprintf(prefdir,sizeof prefdir,"%s/8tris/",d);mkdir(prefdir,0700);
+    chmod(prefdir,0700);}   // private to this user: other accounts on the same computer cannot read preferences, history or the music list
   return prefdir;
 }
 const char* plat_home_dir(void){if(!homedir[0]){const char*h=getenv("HOME");snprintf(homedir,sizeof homedir,"%s/",h?h:"/tmp");}return homedir;}
@@ -32,7 +32,7 @@ void plat_sleep(int ms){SDL_Delay((Uint32)ms);}
 void plat_window_size(int w,int h){if(win&&!(SDL_GetWindowFlags(win)&SDL_WINDOW_FULLSCREEN_DESKTOP))SDL_SetWindowSize(win,w,h);}
 static double now_s(void){return (double)SDL_GetPerformanceCounter()/(double)SDL_GetPerformanceFrequency();}
 int main(int argc,char**argv){
-  int i;for(i=1;i<argc;i++)if(!strcmp(argv[i],"--selftest"))return app_selftest();
+  int i;for(i=1;i<argc;i++){if(!strcmp(argv[i],"--selftest"))return app_selftest();if(!strcmp(argv[i],"--probe"))return 0;}   // --probe: the AppImage launcher checks that this binary can load with the system's libraries
   if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_AUDIO|SDL_INIT_EVENTS)<0){fprintf(stderr,"8tris: SDL could not start: %s\n",SDL_GetError());return 1;}
   mtx=SDL_CreateMutex();
   win=SDL_CreateWindow("8tris",SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,900,700,SDL_WINDOW_RESIZABLE|SDL_WINDOW_SHOWN);

@@ -11,6 +11,7 @@ int main(int argc,char**argv){int seed=argc>1?atoi(argv[1]):1,iters=argc>2?atoi(
   system("rm -rf /tmp/8tris-fz;mkdir -p /tmp/8tris-fz");
   FILE*f=fopen("/tmp/8tris-fz/settings.txt","w");int n=frnd()%12,i;for(i=0;i<n;i++){const char*kk=KEYS[frnd()%31];if(frnd()%2)fprintf(f,"%s=%s\n",kk,VALS[frnd()%21]);else fprintf(f,"%s=%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",kk,(int)frnd()%600-50,(int)frnd()%12-1,(int)frnd()%12,(int)frnd()%8,(int)frnd()%30,frnd()%3,frnd()%3,frnd()%101,frnd()%5,frnd()%7,frnd()%9);}fclose(f);
   f=fopen("/tmp/8tris-fz/history.bin","wb");if(f&&frnd()%2){for(i=0;i<(int)(frnd()%3000);i++)fputc(frnd(),f);}if(f)fclose(f);
+  f=fopen("/tmp/8tris-fz/history.txt","w");if(f&&frnd()%2){int L=frnd()%40;for(i=0;i<L;i++){static const char*K[]={"t","why","score","W","H","fall","weights","tw","theme","keys","themeOn","fx","vol","x"};int m=frnd()%8,j;for(j=0;j<m;j++)fprintf(f,"%s=%s ",K[frnd()%14],VALS[frnd()%21]);if(frnd()%10==0)for(j=0;j<300;j++)fputc(33+frnd()%90,f);fputc('\n',f);}}if(f)fclose(f);
   app_init();int ws[]={160,320,800,1000,1920,3840,121},hs[]={120,200,600,720,1080,2160,90};
   app_resize(ws[frnd()%7],hs[frnd()%7]);run(5);
   int ev;for(ev=0;ev<400;ev++){

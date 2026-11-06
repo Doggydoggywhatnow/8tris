@@ -22,8 +22,26 @@ int plat_thread(void(*fn)(void*),void*arg){ThArg*a=(ThArg*)malloc(sizeof*a);if(!
 void plat_sleep(int ms){Sleep((DWORD)ms);}
 void plat_window_size(int w,int h){if(is_full||!hwnd)return;RECT r={0,0,w,h};AdjustWindowRect(&r,(DWORD)GetWindowLong(hwnd,GWL_STYLE),FALSE);SetWindowPos(hwnd,NULL,0,0,r.right-r.left,r.bottom-r.top,SWP_NOMOVE|SWP_NOZORDER|SWP_NOACTIVATE);}
 static char prefdir[600],homedir[600];
+// Preferences, history and the music folder live in %LOCALAPPDATA%\8tris: the local (not roaming) profile folder, so on work or
+// school networks they are not copied to a server. Versions up to 0.7.2 used %APPDATA%\8tris; that folder is moved here once.
+static void move_old_folder(const char*newdir){
+  const char*ra=getenv("APPDATA");if(!ra||!*ra)return;char old[600];snprintf(old,sizeof old,"%s\\8tris",ra);
+  DWORD oa=GetFileAttributesA(old);if(oa==INVALID_FILE_ATTRIBUTES||!(oa&FILE_ATTRIBUTE_DIRECTORY))return;
+  char nd[600];snprintf(nd,sizeof nd,"%s",newdir);size_t L=strlen(nd);if(L&&nd[L-1]=='\\')nd[L-1]=0;
+  if(GetFileAttributesA(nd)!=INVALID_FILE_ATTRIBUTES)return;              // already have a local folder: leave both alone
+  if(MoveFileExA(old,nd,0))return;                                      // same drive: the whole folder moves at once
+  // Different drives: copy the files one by one, then remove the originals that copied cleanly.
+  if(!CreateDirectoryA(nd,NULL))return;
+  {static const char*F[]={"settings.txt","history.txt","history.bin"};int i;for(i=0;i<3;i++){char a[700],b[700];snprintf(a,sizeof a,"%s\\%s",old,F[i]);snprintf(b,sizeof b,"%s\\%s",nd,F[i]);if(CopyFileA(a,b,TRUE))DeleteFileA(a);}}
+  {char om[700],nm[700];snprintf(om,sizeof om,"%s\\music",old);snprintf(nm,sizeof nm,"%s\\music",nd);
+   if(CreateDirectoryA(nm,NULL)){char pat[720];snprintf(pat,sizeof pat,"%s\\*",om);WIN32_FIND_DATAA fd;HANDLE h=FindFirstFileA(pat,&fd);
+     if(h!=INVALID_HANDLE_VALUE){do{if(!(fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)){char a[1000],b[1000];snprintf(a,sizeof a,"%s\\%s",om,fd.cFileName);snprintf(b,sizeof b,"%s\\%s",nm,fd.cFileName);if(CopyFileA(a,b,TRUE))DeleteFileA(a);}}while(FindNextFileA(h,&fd));FindClose(h);}
+     RemoveDirectoryA(om);}}
+  RemoveDirectoryA(old);   // only succeeds if everything was moved
+}
 const char* plat_pref_dir(void){
-  if(!prefdir[0]){const char*a=getenv("APPDATA");char d[560];snprintf(d,sizeof d,"%s",a&&*a?a:".");CreateDirectoryA(d,NULL);snprintf(prefdir,sizeof prefdir,"%s\\8tris\\",d);CreateDirectoryA(prefdir,NULL);}
+  if(!prefdir[0]){const char*a=getenv("LOCALAPPDATA");if(!a||!*a)a=getenv("APPDATA");char d[560];snprintf(d,sizeof d,"%s",a&&*a?a:".");CreateDirectoryA(d,NULL);
+    snprintf(prefdir,sizeof prefdir,"%s\\8tris\\",d);move_old_folder(prefdir);CreateDirectoryA(prefdir,NULL);}
   return prefdir;
 }
 const char* plat_home_dir(void){if(!homedir[0]){const char*h=getenv("USERPROFILE");snprintf(homedir,sizeof homedir,"%s\\",h&&*h?h:".");}return homedir;}

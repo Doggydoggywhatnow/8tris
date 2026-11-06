@@ -1,6 +1,7 @@
 #include "../src/common.h"
 void plat_lock(void){} void plat_unlock(void){}
 #include "../src/audio.c"
+static void music_mix(float*o,int n){(void)o;(void)n;}   /* music is tested in music.c */
 static float buf[2*SR*6];
 static void reset(void){memset(VX,0,sizeof VX);samples_done=0;memset(lim_dly,0,sizeof lim_dly);for(int i=0;i<64;i++)lim_need[i]=1;lim_gain=1;comp_env=0;
  for(int i=0;i<8;i++){if(cb[i])memset(cb[i],0,CT[i]*4);cs[i]=0;}for(int i=0;i<4;i++)if(ab[i])memset(ab[i],0,AT[i]*4);}

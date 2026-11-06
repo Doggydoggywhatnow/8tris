@@ -1,4 +1,9 @@
 #!/bin/sh
+# 8tris AppImage launcher. Prefer the system's own SDL2 (it knows this desktop best, and it lets 8tris run on older
+# systems); fall back to the copy bundled inside the AppImage when the system has none or it is too old.
 HERE="$(dirname "$(readlink -f "$0")")"
+if LD_BIND_NOW=1 "$HERE/usr/bin/8tris" --probe >/dev/null 2>&1; then
+  exec "$HERE/usr/bin/8tris" "$@"
+fi
 export LD_LIBRARY_PATH="$HERE/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 exec "$HERE/usr/bin/8tris" "$@"

@@ -1,9 +1,10 @@
 #include "../src/common.h"
 void plat_lock(void){} void plat_unlock(void){}
 #include "../src/audio.c"
+static void music_mix(float*o,int n){(void)o;(void)n;}   /* music is tested in music.c */
 #include "../src/game.c"
-static int fxc=0,pfc=0,brk=0;
-static void fxClear(const int*r,int n){fxc++;} static void fx_break(void){brk++;} static void pfStart(void){pfc++;} static void fxReset(void){combo=0;} static void endRun(void){}
+static int fxc=0,pfc=0,brk_=0;
+static void fxClear(const int*r,int n){fxc++;} static void fx_break(void){brk_++;} static void pfStart(void){pfc++;} static void fxReset(void){combo=0;} static void endRun(void){}
 int main(void){
   levels_init();int n;
   for(n=1;n<=10;n++){gen(n);printf("n=%d count=%d\n",n,LVn[n]);}

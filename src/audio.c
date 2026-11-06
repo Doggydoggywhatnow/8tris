@@ -36,8 +36,9 @@ static const double LIMIT_DB=-4,BUDGET=6;
 
 // ---- The synth engine: a pool of scheduled voices mixed into one mono bus, then reverb, compressor and limiter ----
 typedef struct{
-  int active,noise,wave,nosc,primed;i64 start;
+  int active,noise,wave,nosc,primed;i64 start;  // active: 0 free, 1 playing, 2 reserved (being set up by the game thread, not mixed yet)
   double duty,f0,f1,dur,gain,wet,det,ph[2];     // oscillator voices
+  double fc,fr,env,ea,ed,dmul;int run,decay;    // running pitch and envelope, stepped once per sample instead of recomputed with pow()
   double cut0,cut1,b[5],z1,z2;                    // noise voices: low-pass sweep and filter state
 }Voice;
 #define NVOX 512
@@ -46,9 +47,11 @@ static Voice VX[NVOX];static i64 samples_done=0;
 static void vox_wave(Voice*v,int w){v->wave=w;v->duty=w==W_PULSE25?.25:w==W_PULSE12?.12:.5;}
 static Voice* vox_new(double delay,double dur){
   int i;plat_lock();
-  for(i=0;i<NVOX;i++)if(!VX[i].active){Voice*v=&VX[i];memset(v,0,sizeof*v);v->active=1;v->start=samples_done+(i64)(delay*SR);v->dur=dur;plat_unlock();return v;}
+  for(i=0;i<NVOX;i++)if(!VX[i].active){Voice*v=&VX[i];memset(v,0,sizeof*v);v->active=2;v->start=samples_done+(i64)(delay*SR);v->dur=dur;plat_unlock();return v;}
   plat_unlock();return NULL;
 }
+// Hands a fully set-up voice to the audio thread. Until then it is skipped, so it is never mixed half-initialized.
+static void vox_go(Voice*v){plat_lock();v->active=1;plat_unlock();}
 // One oscillator note. role picks the wave from the current voice; to = glide target (0 for none); wet = reverb send.
 static void tone(double f,double d,int role,double g,double to,double delay,double wet){
   const SVoice*sv=&VOICES[snd_voice];if(snd_vol<=0)return;
@@ -57,11 +60,14 @@ static void tone(double f,double d,int role,double g,double to,double delay,doub
   if(sv->bend>0&&to<=0&&role!=R_BODY)v->f0=f*pow(2,-sv->bend/12.0);
   v->nosc=sv->det>0?2:1;v->det=sv->det;
   v->gain=dmax(.0002,g*(v->nosc>1?.65:1));v->wet=dmin(1,wet+sv->wet);
+  if(!(v->f0>0)||!(v->f1>0))v->f0=v->f1=1;   // never a zero or invalid pitch (it would turn into NaN and silence everything)
+  vox_go(v);
 }
 // Filtered noise burst: cut = starting low-pass cutoff in Hz, cut2 = cutoff it sweeps to (0 for none).
 static void noise_burst(double d,double g,double cut,double delay,double cut2){
   if(snd_vol<=0)return;Voice*v=vox_new(delay,d);if(!v)return;
   v->noise=1;v->gain=g;v->cut0=cut>0?cut:1500;v->cut1=cut2>0?cut2:v->cut0;
+  vox_go(v);
 }
 static double blep(double t,double dt){if(t<dt){t/=dt;return t+t-t*t-1;}if(t>1-dt){t=(t-1)/dt;return t*t+t+t+1;}return 0;}
 static inline double osc_sample(int w,double duty,double t,double dt){
@@ -88,10 +94,14 @@ static void vox_render(Voice*v,float*dry,float*snd,i64 base,int n){
       double in=(rnd()*2-1)*(1-t/v->dur);
       x=v->b[0]*in+v->z1;v->z1=v->b[1]*in-v->b[3]*x+v->z2;v->z2=v->b[2]*in-v->b[4]*x;x*=v->gain;
     }else{
-      double env,f=v->f0*pow(v->f1/v->f0,t/v->dur);int k;
-      if(t<.006)env=1e-4*pow(v->gain/1e-4,t/.006);
-      else{double r=(t-.006)/dmax(v->dur-.006,1e-4);env=v->gain*pow(1e-4/v->gain,dmin(r,1));}
-      x=0;for(k=0;k<v->nosc;k++){double ff=k?f*pow(2,v->det/1200):f,d2=ff/SR;x+=osc_sample(v->wave,v->duty,v->ph[k],d2);v->ph[k]+=d2;if(v->ph[k]>=1)v->ph[k]-=1;}
+      // Exponential pitch glide and envelope (6 ms attack, then a decay to -80 dB over the note), advanced by a fixed ratio each sample.
+      double env,f;int k;
+      if(!v->run){v->run=1;v->fc=v->f0;v->fr=pow(v->f1/v->f0,1.0/dmax(v->dur*SR,1));v->env=1e-4;v->ea=pow(v->gain/1e-4,1.0/(.006*SR));
+        v->ed=pow(1e-4/v->gain,1.0/(dmax(v->dur-.006,1e-4)*SR));v->dmul=pow(2,v->det/1200);}
+      f=v->fc;v->fc*=v->fr;
+      if(t<.006){env=v->env;v->env*=v->ea;}
+      else{if(!v->decay){v->decay=1;v->env=v->gain*pow(1e-4/v->gain,dmin((t-.006)/dmax(v->dur-.006,1e-4),1));}env=v->env;v->env=dmax(v->env*v->ed,1e-4);}
+      x=0;for(k=0;k<v->nosc;k++){double ff=k?f*v->dmul:f,d2=ff/SR;x+=osc_sample(v->wave,v->duty,v->ph[k],d2);v->ph[k]+=d2;if(v->ph[k]>=1)v->ph[k]-=1;}
       x*=env;
     }
     dry[i]+=(float)x;snd[i]+=(float)(x*v->wet);
@@ -118,13 +128,14 @@ static void reverb_init(void){
 // Compressor (threshold -24 dB, ratio 12, soft knee) followed by a look-ahead limiter at LIMIT_DB.
 static double comp_env=0,lim_gain=1;static float lim_dly[64];static int lim_pos=0;static float lim_need[64];
 static float master_tick(float x){
-  double a=fabs(x),ca=exp(-1.0/(.003*SR)),cr=exp(-1.0/(.25*SR));
+  static double ca=0,cr=0,ceil_=0;if(ca==0){ca=exp(-1.0/(.003*SR));cr=exp(-1.0/(.25*SR));ceil_=pow(10,LIMIT_DB/20);}
+  double a=fabs(x);
   comp_env=a>comp_env?ca*comp_env+(1-ca)*a:cr*comp_env+(1-cr)*a;
   double db=20*log10(comp_env+1e-9),th=-24,kn=30,over=db-th,out;
   if(2*over<-kn)out=db;else if(2*over>kn)out=th+over/12;else{double q=over+kn/2;out=db+(1/12.0-1)*q*q/(2*kn);}
   float y=(float)(x*pow(10,(out-db)/20));
   // look-ahead limiter
-  double ceil_=pow(10,LIMIT_DB/20);lim_dly[lim_pos]=y;float need=fabsf(y)>ceil_?(float)(ceil_/fabsf(y)):1;lim_need[lim_pos]=need;
+  lim_dly[lim_pos]=y;float need=fabsf(y)>ceil_?(float)(ceil_/fabsf(y)):1;lim_need[lim_pos]=need;
   float mn=1;int i;for(i=0;i<64;i++)if(lim_need[i]<mn)mn=lim_need[i];
   if(mn<lim_gain)lim_gain=mn;else lim_gain+=(1-lim_gain)*.002;
   int rp=(lim_pos+1)&63;float o=lim_dly[rp]*(float)lim_gain;lim_pos=(lim_pos+1)&63;return o;
@@ -134,9 +145,10 @@ static void audio_mix(float*out,int n){
   static float dry[8192],snd[8192];int i,k;if(n>8192)n=8192;
   reverb_init();memset(dry,0,n*4);memset(snd,0,n*4);
   plat_lock();
-  for(k=0;k<NVOX;k++)if(VX[k].active)vox_render(&VX[k],dry,snd,samples_done,n);
+  for(k=0;k<NVOX;k++)if(VX[k].active==1)vox_render(&VX[k],dry,snd,samples_done,n);
   samples_done+=n;plat_unlock();
-  for(i=0;i<n;i++){float x=(dry[i]+reverb_tick(snd[i])*(float)rv_scale)*(float)snd_vol*(float)TRIM_GAIN;float y=master_tick(x);out[2*i]=y;out[2*i+1]=y;}
+  for(i=0;i<n;i++){float d=dry[i],w=snd[i];if(!(d>-1e6f&&d<1e6f))d=0;if(!(w>-1e6f&&w<1e6f))w=0;   // a bad sample can never poison the reverb
+    float x=(d+reverb_tick(w)*(float)rv_scale)*(float)snd_vol*(float)TRIM_GAIN;float y=master_tick(x);out[2*i]=y;out[2*i+1]=y;}
   music_mix(out,n);
 }
 

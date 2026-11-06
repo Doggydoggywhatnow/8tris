@@ -8,7 +8,22 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <time.h>
+#ifdef _WIN32
+#include <io.h>        // _commit, used for crash-safe saving
+#else
+#include <unistd.h>    // fsync
+#include <sys/stat.h>  // mkdir, chmod
+#endif
 
+// Linux builds ask for the long-standing versions of a few math functions. Newer glibc releases only re-versioned them
+// (same results), and pinning the old names lets one build run on older Linux systems too.
+#if defined(__linux__)&&defined(__x86_64__)&&defined(__GLIBC__)
+__asm__(".symver fmod,fmod@GLIBC_2.2.5");
+__asm__(".symver hypot,hypot@GLIBC_2.2.5");
+__asm__(".symver exp,exp@GLIBC_2.2.5");
+__asm__(".symver log,log@GLIBC_2.2.5");
+__asm__(".symver pow,pow@GLIBC_2.2.5");
+#endif
 typedef uint32_t u32; typedef uint8_t u8; typedef int64_t i64;
 #define N_(a) ((int)(sizeof(a)/sizeof((a)[0])))
 #undef RGB

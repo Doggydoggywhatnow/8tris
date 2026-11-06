@@ -57,11 +57,12 @@ static void board_bg(double w,double h,double now){
   if(T(C_BOARD)==TH_SWIRL){swirl_fill(2,BX,BY,w,h,6,tm(now)+9000,.2,50);return;}
   double t=tm(now)/30;u32 c0=hsl(t,.7,.13),c1=hsl(t+80,.7,.07),c2=hsl(t+160,.7,.14);
   int x,y,ix=(int)w,iy=(int)h;double den=w*w+h*h;
-  for(y=0;y<iy;y++){int py=BY+y;if(py<CY0||py>=CY1)continue;
-    for(x=0;x<ix;x++){int px=BX+x;if(px<CX0||px>=CX1)continue;
-      double q=(x*w+y*h)/den;u32 a,b;double k;if(q<.5){a=c0;b=c1;k=q*2;}else{a=c1;b=c2;k=(q-.5)*2;}
-      int ar=(a>>16)&255,ag=(a>>8)&255,ab=a&255,br=(b>>16)&255,bg=(b>>8)&255,bb=b&255;
-      FB[py*FW+px]=RGB((int)(ar+(br-ar)*k),(int)(ag+(bg-ag)*k),(int)(ab+(bb-ab)*k));}}
+  // The diagonal gradient is looked up from a table of 4096 steps instead of being mixed per pixel.
+  static u32 lut[4097];{int j;for(j=0;j<=4096;j++){double q=j/4096.0;u32 a,b;double k;if(q<.5){a=c0;b=c1;k=q*2;}else{a=c1;b=c2;k=(q-.5)*2;}
+    int ar=(a>>16)&255,ag=(a>>8)&255,ab=a&255,br=(b>>16)&255,bg=(b>>8)&255,bb=b&255;lut[j]=RGB((int)(ar+(br-ar)*k),(int)(ag+(bg-ag)*k),(int)(ab+(bb-ab)*k));}}
+  {double sx=w/den*4096,sy=h/den*4096;
+   for(y=0;y<iy;y++){int py=BY+y;if(py<CY0||py>=CY1)continue;int x0=imax(0,CX0-BX),x1=imin(ix,CX1-BX);u32*row=FB+(size_t)py*FW+BX;double q0=y*sy;
+     for(x=x0;x<x1;x++){int j=(int)(x*sx+q0);row[x]=lut[j<0?0:j>4096?4096:j];}}}
   // twinkling stars on a fixed pattern
   unsigned sd=12345;int i;double z=dmax(1,floor(S/9.0+.5));
   for(i=0;i<40;i++){

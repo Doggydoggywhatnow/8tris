@@ -36,14 +36,87 @@ static void snapshot(Snap*s){
   s->fx=fxLevel;s->pf=pcLevel;s->sc=sndCombo;s->sp=sndPf;s->sd=sdRate;s->vol=(int)floor(snd_vol*100+.5);memcpy(s->keys,binds,sizeof binds);
 }
 static const char* get_pref_path(const char*name){static char b[600];snprintf(b,sizeof b,"%s%s",plat_pref_dir(),name);return b;}
-static void hist_save(void){
-  FILE*f=fopen(get_pref_path("history.bin"),"wb");if(!f)return;
-  unsigned magic=0x38544831u,sz=(unsigned)sizeof(Hist);fwrite(&magic,4,1,f);fwrite(&sz,4,1,f);fwrite(&nhist,4,1,f);fwrite(hist,sizeof(Hist),nhist,f);fclose(f);
+
+// ---- Crash-safe saving: write a temporary file, flush it to the disk, then swap it in with one rename. ----
+// A crash or power cut mid-save leaves either the old file or the new one, never half of one.
+static FILE* safe_open(const char*path,char*tmp,int tn){snprintf(tmp,(size_t)tn,"%s.tmp",path);return fopen(tmp,"w");}
+static int safe_close(FILE*f,const char*tmp,const char*path){
+  int ok=!ferror(f)&&fflush(f)==0;
+#ifdef _WIN32
+  if(ok&&_commit(_fileno(f))!=0)ok=0;
+#else
+  if(ok&&fsync(fileno(f))!=0)ok=0;
+#endif
+  if(fclose(f)!=0)ok=0;
+#ifdef _WIN32
+  if(ok)ok=MoveFileExA(tmp,path,MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)!=0;
+#else
+  if(ok)ok=rename(tmp,path)==0;
+#endif
+  if(!ok)remove(tmp);
+  return ok;
+}
+
+// ---- History file: plain text, one run per line, newest first, as "key=value" pairs separated by spaces. ----
+// Unknown keys are ignored and missing ones read as 0, so older and newer versions of 8tris can read each other's history.
+#define HIST_FILE "history.txt"
+static void ints_out(FILE*f,const char*k,const int*v,int n){int i;fprintf(f," %s=",k);for(i=0;i<n;i++)fprintf(f,"%d%s",v[i],i<n-1?",":"");}
+static int store_off=0;   // set by the self-test so it never writes over the player's files
+static int hist_save(void){
+  if(store_off)return 1;
+  char tmp[640];const char*path=get_pref_path(HIST_FILE);char dst[600];snprintf(dst,sizeof dst,"%s",path);
+  FILE*f=safe_open(dst,tmp,sizeof tmp);if(!f)return 0;int i;
+  fprintf(f,"# 8tris history, format 1. One finished run per line, newest first.\n");
+  for(i=0;i<nhist;i++){const Hist*h=&hist[i];const Snap*q=&h->s;
+    fprintf(f,"t=%lld why=%d score=%d lines=%d level=%d time=%d pieces=%d combo=%d dirty=%d",(long long)h->t,h->why,h->score,h->lines,h->level,h->time,h->pieces,h->combo,h->dirty);
+    fprintf(f," W=%d H=%d slots=%d fall=%g lvl=%d clear=%d",q->W,q->H,q->slots,q->fall,q->lvl,q->clear);
+    ints_out(f,"weights",q->weights,11);ints_out(f,"tw",q->tw,7);fprintf(f," themeOn=%d",q->themeOn);ints_out(f,"theme",q->theme,N_COMPS);
+    fprintf(f," fx=%d pf=%d sc=%d sp=%d sd=%d vol=%d",q->fx,q->pf,q->sc,q->sp,q->sd,q->vol);ints_out(f,"keys",&q->keys[0][0],N_ACTS*2);fprintf(f,"\n");}
+  return safe_close(f,tmp,dst);
+}
+static int parse_ints(const char*s,int*out,int n);
+// Splits off the next space-separated word (in place).
+static char* next_tok(char**p){char*s=*p;while(*s==' '||*s=='\t'||*s=='\r'||*s=='\n')s++;if(!*s)return NULL;char*e=s;while(*e&&*e!=' '&&*e!='\t'&&*e!='\r'&&*e!='\n')e++;if(*e)*e++=0;*p=e;return s;}
+// Reads one history line into h. Returns 1 if it held a run.
+static int hist_parse(char*line,Hist*h){
+  memset(h,0,sizeof*h);int got=0;char*p=line,*tok;Snap*q=&h->s;
+  while((tok=next_tok(&p))){
+    char*eq=strchr(tok,'=');if(!eq)continue;*eq=0;const char*k=tok,*v=eq+1;int iv=atoi(v);
+    if(!strcmp(k,"t")){h->t=(i64)strtoll(v,NULL,10);got=1;}
+    else if(!strcmp(k,"why"))h->why=iv?1:0;else if(!strcmp(k,"score"))h->score=iv;else if(!strcmp(k,"lines"))h->lines=iv;
+    else if(!strcmp(k,"level"))h->level=iv;else if(!strcmp(k,"time"))h->time=iv;else if(!strcmp(k,"pieces"))h->pieces=iv;
+    else if(!strcmp(k,"combo"))h->combo=iv;else if(!strcmp(k,"dirty"))h->dirty=iv?1:0;
+    else if(!strcmp(k,"W"))q->W=iv;else if(!strcmp(k,"H"))q->H=iv;else if(!strcmp(k,"slots"))q->slots=iv;
+    else if(!strcmp(k,"fall")){double d=atof(v);q->fall=d==d?d:0;}else if(!strcmp(k,"lvl"))q->lvl=iv;else if(!strcmp(k,"clear"))q->clear=iv;
+    else if(!strcmp(k,"weights"))parse_ints(v,q->weights,11);else if(!strcmp(k,"tw"))parse_ints(v,q->tw,7);
+    else if(!strcmp(k,"themeOn"))q->themeOn=iv;else if(!strcmp(k,"theme"))parse_ints(v,q->theme,N_COMPS);
+    else if(!strcmp(k,"fx"))q->fx=iv;else if(!strcmp(k,"pf"))q->pf=iv;else if(!strcmp(k,"sc"))q->sc=iv;else if(!strcmp(k,"sp"))q->sp=iv;
+    else if(!strcmp(k,"sd"))q->sd=iv;else if(!strcmp(k,"vol"))q->vol=iv;else if(!strcmp(k,"keys"))parse_ints(v,&q->keys[0][0],N_ACTS*2);
+  }
+  return got;
+}
+static int hist_read_text(Hist*out,int cap){
+  FILE*f=fopen(get_pref_path(HIST_FILE),"r");if(!f)return -1;static char line[4096];int n=0;
+  while(n<cap&&fgets(line,sizeof line,f)){
+    size_t L=strlen(line);if(L==sizeof line-1&&line[L-1]!='\n'){int c;while((c=fgetc(f))!=EOF&&c!='\n');continue;}   // an overlong line is skipped, not misread
+    if(line[0]=='#')continue;if(hist_parse(line,&out[n]))n++;}
+  fclose(f);return n;
+}
+// Older versions (0.7.2 and before) kept history as a raw binary dump. It is converted once, checked, and then removed,
+// so that "Clear history" really clears everything and no stale copy is left behind.
+static void hist_migrate_bin(void){
+  char bin[600];snprintf(bin,sizeof bin,"%s",get_pref_path("history.bin"));
+  FILE*f=fopen(bin,"rb");if(!f)return;unsigned magic=0,sz=0;int n=0,ok=0;
+  if(fread(&magic,4,1,f)==1&&fread(&sz,4,1,f)==1&&fread(&n,4,1,f)==1&&magic==0x38544831u&&sz==sizeof(Hist)&&n>=0&&n<=MAXHIST){nhist=(int)fread(hist,sizeof(Hist),(size_t)n,f);ok=1;}
+  fclose(f);
+  if(!ok){nhist=0;return;}   // a file this version cannot read is left alone
+  if(hist_save()){static Hist chk[MAXHIST];if(hist_read_text(chk,MAXHIST)==nhist)remove(bin);}
 }
 static void hist_load(void){
-  FILE*f=fopen(get_pref_path("history.bin"),"rb");if(!f)return;unsigned magic=0,sz=0;int n=0;
-  if(fread(&magic,4,1,f)==1&&fread(&sz,4,1,f)==1&&fread(&n,4,1,f)==1&&magic==0x38544831u&&sz==sizeof(Hist)&&n>=0&&n<=MAXHIST){nhist=(int)fread(hist,sizeof(Hist),n,f);}
-  fclose(f);
+  if(store_off){nhist=0;return;}
+  int n=hist_read_text(hist,MAXHIST);
+  if(n>=0){nhist=n;return;}
+  nhist=0;hist_migrate_bin();
 }
 static void endRun(void){
   if(!board||saved)return;saved=1;if(!clearOn||pieces<1)return;int why=over?0:1;if(why==1&&score<=0)return;
@@ -89,15 +162,16 @@ static int entry_lines(const Hist*e,char out[][400],int cap){
 // Writes the full history to a text file in the user's home folder. Returns the path (or NULL on failure).
 static const char* export_history(void){
   static char path[700];char d[32];fmt_date((i64)time(NULL),d,32);d[10]=0;
-  snprintf(path,sizeof path,"%s8tris-history-%s.txt",plat_home_dir(),d);FILE*f=fopen(path,"w");if(!f)return NULL;
+  snprintf(path,sizeof path,"%s8tris-history-%s.txt",plat_home_dir(),d);char tmp[720];FILE*f=safe_open(path,tmp,sizeof tmp);if(!f)return NULL;
   char dd[32];fmt_date((i64)time(NULL),dd,32);fprintf(f,"8tris score history\nExported %s, %d run%s\n\n",dd,nhist,nhist==1?"":"s");
   static char L[60][400];int i,j;for(i=0;i<nhist;i++){int n=entry_lines(&hist[i],L,60);fprintf(f,"#%d  %s\n",nhist-i,L[0]);for(j=1;j<n;j++)fprintf(f,"%s\n",L[j]);fprintf(f,"\n");}
-  fclose(f);return path;
+  return safe_close(f,tmp,path)?path:NULL;
 }
 
 // ---- Saved settings: a small key=value text file ----
 static void save_settings(void){
-  FILE*f=fopen(get_pref_path("settings.txt"),"w");if(!f)return;int i;
+  if(store_off)return;
+  char tmp[640],dst[600];snprintf(dst,sizeof dst,"%s",get_pref_path("settings.txt"));FILE*f=safe_open(dst,tmp,sizeof tmp);if(!f)return;int i;
   fprintf(f,"grid=%d,%d\nslots=%d\nfall=%g\nlvl=%d\nclear=%d\nsd=%d\nvol=%d\nthemeOn=%d\ncalm=%d\nfxm=%d\nadv=%d,%d,%d,%d\nsolid=%06x,%06x,%d\nui=%d,%d,%d,%d,%d,%d,%d,%d\n",W,H,slots,fallV,lvlSys,clearOn,sdRate,(int)floor(snd_vol*100+.5),themeOn,calm,fxMaster,ADV[0],ADV[1],ADV[2],ADV[3],(unsigned)(solidP&0xFFFFFF),(unsigned)(solidG&0xFFFFFF),solidSep,uiFam,uiBold,uiItal,uiPt,hiCon,mwSel,lsSel,ghostStr);
   fprintf(f,"res=%d\nfps=%d\nshowfps=%d\nnowplay=%d,%d,%d,%d,%d,%d,%d,%d,%d\nmusic=%d,%d\nmusicfile=%s\nnext=%d\nprefbtn=%d\nboardpos=%d,%d\ntimer=%d,%d,%d,%d,%d,%d\nclock=%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\nstack=%d,%d\nfilters=%d,%d,%d,%d,%d,%d,%d,%d,%06x\n",resSet,fpsSet,showFps,NP.on,NP.pos,NP.sz,NP.op,NP.fam,NP.bold,npArt,npArtSz,npArtist,musMode,musVol,musFile,NQ,prefBtn,boardPX,boardPY,
     CLK[0].on,CLK[0].pos,CLK[0].sz,CLK[0].op,CLK[0].fam,CLK[0].bold,CLK[1].on,CLK[1].pos,CLK[1].sz,CLK[1].op,CLK[1].fam,CLK[1].bold,clkTzH,clkTzM,clkDst,clk24,clkSecs,stackV,stackFirst,
@@ -106,11 +180,12 @@ static void save_settings(void){
   fprintf(f,"tw=");for(i=0;i<7;i++)fprintf(f,"%d%s",tw[i],i<6?",":"\n");
   fprintf(f,"theme=");for(i=0;i<N_COMPS;i++)fprintf(f,"%d%s",TC[i],i<N_COMPS-1?",":"\n");
   fprintf(f,"binds=");for(i=0;i<N_ACTS*2;i++)fprintf(f,"%d%s",binds[i/2][i%2],i<N_ACTS*2-1?",":"\n");
-  fclose(f);
+  safe_close(f,tmp,dst);
 }
 static void clk_set(int i,const int*v){CLK[i].on=v[0]?1:0;CLK[i].pos=iclamp(v[1],0,6);CLK[i].sz=iclamp(v[2],12,120);CLK[i].op=iclamp(v[3],10,100);CLK[i].fam=iclamp(v[4],0,6);CLK[i].bold=v[5]?1:0;}
 static int parse_ints(const char*s,int*out,int n){int i=0;while(*s&&i<n){out[i++]=atoi(s);while(*s&&*s!=',')s++;if(*s==',')s++;}return i;}
 static void load_settings(void){
+  if(store_off)return;   // the self-test always runs with the defaults
   FILE*f=fopen(get_pref_path("settings.txt"),"r");if(!f)return;char line[400];int v[40],i,n;
   while(fgets(line,sizeof line,f)){
     char*eq=strchr(line,'=');if(!eq)continue;*eq=0;const char*k=line,*val=eq+1;
@@ -137,7 +212,7 @@ static void load_settings(void){
     else if(!strcmp(k,"next"))NQ=iclamp(atoi(val),0,10);
     else if(!strcmp(k,"prefbtn"))prefBtn=iclamp(atoi(val),0,6);
     else if(!strcmp(k,"timer")){if(parse_ints(val,v,6)==6)clk_set(0,v);}
-    else if(!strcmp(k,"clock")){if(parse_ints(val,v,11)==11){clk_set(1,v);clkTzH=iclamp(v[6],-12,14);clkTzM=iclamp(v[7],0,3)*0+((v[7]==15||v[7]==30||v[7]==45)?v[7]:0);clkDst=v[8]?1:0;clk24=v[9]?1:0;clkSecs=v[10]?1:0;}}
+    else if(!strcmp(k,"clock")){if(parse_ints(val,v,11)==11){clk_set(1,v);clkTzH=iclamp(v[6],-12,14);clkTzM=(v[7]==15||v[7]==30||v[7]==45)?v[7]:0;clkDst=v[8]?1:0;clk24=v[9]?1:0;clkSecs=v[10]?1:0;}}
     else if(!strcmp(k,"stack")){if(parse_ints(val,v,2)==2){stackV=v[0]?1:0;stackFirst=v[1]?1:0;}}
     else if(!strcmp(k,"filters")){int q[8];unsigned tc;if(sscanf(val,"%d,%d,%d,%d,%d,%d,%d,%d,%x",&q[0],&q[1],&q[2],&q[3],&q[4],&q[5],&q[6],&q[7],&tc)==9){fltBri=iclamp(q[0],-50,50);fltCon=iclamp(q[1],50,150);fltSat=iclamp(q[2],0,200);fltHue=iclamp(q[3],0,359);fltSplit=iclamp(q[4],0,12);fltTint=iclamp(q[5],0,100);fltOp=iclamp(q[6],10,100);fltInv=q[7]?1:0;fltTintC=0xFF000000u|(tc&0xFFFFFF);}}
     else if(!strcmp(k,"weights")){if(parse_ints(val,v,11)==11)for(i=0;i<11;i++)weights[i+1]=iclamp(v[i],0,10);}

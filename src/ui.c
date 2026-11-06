@@ -54,7 +54,7 @@ static int ui_head(const char*s,int*open,double now){
     u32 c=P.swirl?sw_col(y/400.0+tm(now)*.0003):P.wild?hsl(now/10+y/3.0,1,.65):P.fg;text_mid(1,U(14),PX,y,h,c,1,s);
     text_right(0,U(16),PX+PW,y+U(9)+U(12),P.fg,.6,*open?"\xE2\x88\x92":"+");
     fill_rect(PX,y+h-1,PW,1,P.sep,1);
-    if(uhit(PX,y,PW,h)){if(open>=sec_open&&open<sec_open+8){if(!*open){*open=1;int k;for(k=0;k<8;k++)if(sec_open+k!=open)sec_open[k]=0;want_top=1;}}else *open=!*open;if(0){int k;for(k=0;k<8;k++)if(sec_open+k!=open)sec_open[k]=0;want_top=1;}}   // settings sections work like an accordion: opening one closes the rest
+    if(uhit(PX,y,PW,h)){if(open>=sec_open&&open<sec_open+8){if(!*open){*open=1;int k;for(k=0;k<8;k++)if(sec_open+k!=open)sec_open[k]=0;want_top=1;}}else *open=!*open;}   // settings sections work like an accordion: opening one closes the rest
   }
   if(*open)cy+=U(4);
   return *open;
@@ -222,6 +222,9 @@ static void pv_tick(void){
 }
 
 static void fall_typed(double rate){fallV=100*log(rate/0.2)/log(100);if(pieces>0&&!over)runDirty=1;}
+// Shared choice lists: the seven font families, and the places a timer, clock or track display can go (the last is the side panel).
+static const char*FONT_NAMES[7]={"DejaVu Sans (default)","Liberation Sans (Arial-like)","Carlito (Calibri-like)","Liberation Serif (Times-like)","Liberation Mono (monospace)","Atkinson Hyperlegible","OpenDyslexic"};
+static const char*PLACE_NAMES[7]={"Top left","Top center","Top right","Bottom left","Bottom center","Bottom right","Side panel"};
 static const char*SETNAME[11]={"1 block","2 blocks","3 blocks","4 blocks","5 blocks","6 blocks","7 blocks","8 blocks","9 blocks","10 blocks","Letters A\xE2\x80\x93Z"};
 static const char*WINN[6]={"Choose\xE2\x80\xA6","800 \xC3\x97 600","1024 \xC3\x97 768","1280 \xC3\x97 720","1600 \xC3\x97 900","1920 \xC3\x97 1080"};
 static const int WINW[6]={0,800,1024,1280,1600,1920},WINH[6]={0,600,768,720,900,1080};
@@ -296,8 +299,8 @@ static void settings_panel(double now){
     ui_check("Invert colors",&fltInv);
     if(btn_at(PX,cy,U(150),"Reset filters")){fltBri=0;fltCon=100;fltSat=100;fltHue=0;fltSplit=0;fltTint=0;fltOp=100;fltInv=0;fltTintC=0xFFFF9A3Cu;ui_changed=1;}
     cy+=U(40);
-    {static const char*PN[7]={"Top left","Top center","Top right","Bottom left","Bottom center","Bottom right","Side panel"};
-     static const char*FN[7]={"DejaVu Sans (default)","Liberation Sans (Arial-like)","Carlito (Calibri-like)","Liberation Serif (Times-like)","Liberation Mono (monospace)","Atkinson Hyperlegible","OpenDyslexic"};
+    {
+     
      static const char*MN[4]={"00","15","30","45"};static const char*NM[2]={"Timer","Clock"};
      static char L[2][6][40];int i;
      for(i=0;i<2;i++){
@@ -305,15 +308,15 @@ static void settings_panel(double now){
        snprintf(L[i][0],40,"Show %s",i?"clock":"timer");ui_check(L[i][0],&CLK[i].on);
        if(i==1&&CLK[1].on){
          ui_num("UTC offset, hours",&clkTzH,-12,14);
-         int mi=clkTzM==15?1:clkTzM==30?2:clkTzM==45?3:0;ui_select("UTC offset, minutes",&mi,MN,4,15,0);clkTzM=mi*15;
+         static int mi=0,miv=0;if(mi!=miv)clkTzM=iclamp(mi,0,3)*15;mi=miv=clkTzM/15;ui_select("UTC offset, minutes",&mi,MN,4,15,0);   /* static: the dropdown writes here after this function returns */
          ui_check("Daylight saving (+1 hour)",&clkDst);ui_check("24-hour clock",&clk24);ui_check("Show seconds",&clkSecs);
          ui_keys("Type your own offset from UTC, for example -5 for New York in winter, or 5 and 30 for India. 8tris never looks up your timezone or location: it only reads the device's clock and adds the offset you enter.");
        }
        if(CLK[i].on){
-         snprintf(L[i][1],40,"%s position",NM[i]);ui_select(L[i][1],&CLK[i].pos,PN,7,127,0);
+         snprintf(L[i][1],40,"%s position",NM[i]);ui_select(L[i][1],&CLK[i].pos,PLACE_NAMES,7,127,0);
          snprintf(L[i][2],40,"%s size",NM[i]);snprintf(b,sizeof b,"%d pt",CLK[i].sz);ui_slider(L[i][2],&CLK[i].sz,12,120,b);
          snprintf(L[i][3],40,"%s opacity",NM[i]);snprintf(b,sizeof b,"%d%%",CLK[i].op);ui_slider(L[i][3],&CLK[i].op,10,100,b);
-         snprintf(L[i][4],40,"%s font",NM[i]);ui_select(L[i][4],&CLK[i].fam,FN,7,127,0);
+         snprintf(L[i][4],40,"%s font",NM[i]);ui_select(L[i][4],&CLK[i].fam,FONT_NAMES,7,127,0);
          snprintf(L[i][5],40,"%s bold",NM[i]);ui_check(L[i][5],&CLK[i].bold);
          if(i==0)ui_keys("Counts play time only: it stops while paused or in this menu, and starts over with each game. In the side panel the size shrinks to fit.");
        }
@@ -346,17 +349,17 @@ static void settings_panel(double now){
      if(!was){music_scan();}was=1;
      ui_select("Music",&musMode,MM,4,15,0);
      if(musMode){
-       if(musMode==1&&nmfiles){static const char*nm[MUS_MAXFILES];int k;for(k=0;k<nmfiles;k++)nm[k]=mfiles[k];int sel=musSel;ui_select("Track",&sel,nm,nmfiles,-1,0);if(sel!=musSel&&sel>=0&&sel<nmfiles){musSel=sel;snprintf(musFile,sizeof musFile,"%s",mfiles[sel]);}}
+       if(musMode==1&&nmfiles){static const char*nm[MUS_MAXFILES];int k;for(k=0;k<nmfiles;k++)nm[k]=mfiles[k];static int tsel=0,tselv=0;if(tsel!=tselv&&tsel>=0&&tsel<nmfiles){musSel=tsel;snprintf(musFile,sizeof musFile,"%s",mfiles[tsel]);}tsel=tselv=musSel;ui_select("Track",&tsel,nm,nmfiles,-1,0);}   /* static: the dropdown writes here after this function returns */
        snprintf(b,sizeof b,musVol?"%d%%":"Off",musVol);ui_slider("Music volume",&musVol,0,100,b);
        if(mus_status[0])ui_keys(mus_status);
-       {static const char*TPN[6]={"Top left","Top center","Top right","Bottom left","Bottom center","Bottom right"};
-        static const char*TFN[7]={"DejaVu Sans (default)","Liberation Sans (Arial-like)","Carlito (Calibri-like)","Liberation Serif (Times-like)","Liberation Mono (monospace)","Atkinson Hyperlegible","OpenDyslexic"};
+       {
+        
         ui_check("Show track on screen",&NP.on);
         if(NP.on){
-          ui_select("Track display position",&NP.pos,TPN,6,63,0);
+          ui_select("Track display position",&NP.pos,PLACE_NAMES,6,63,0);
           snprintf(b,sizeof b,"%d pt",NP.sz);ui_slider("Track display size",&NP.sz,10,48,b);
           snprintf(b,sizeof b,"%d%%",NP.op);ui_slider("Track display opacity",&NP.op,10,100,b);
-          ui_select("Track display font",&NP.fam,TFN,7,127,0);ui_check("Track display bold",&NP.bold);
+          ui_select("Track display font",&NP.fam,FONT_NAMES,7,127,0);ui_check("Track display bold",&NP.bold);
           ui_check("Show artist and album",&npArtist);ui_check("Show album art",&npArt);
           if(npArt){snprintf(b,sizeof b,"%d px",npArtSz);ui_slider("Album art size",&npArtSz,32,256,b);}
           ui_keys("The title, artist, album and cover picture are read from the music file's own tags. If a file has no title tag, its file name is shown.");
@@ -369,7 +372,7 @@ static void settings_panel(double now){
   }
   // ---- Display ----
   if(ui_head("Display",&sec_open[4],now)){
-    {int ws=0;ui_select("Window size",&ws,WINN,6,63,0);if(ws>0){plat_window_size(WINW[ws],WINH[ws]);}}
+    {static int ws=0;if(ws>0&&ws<6){plat_window_size(WINW[ws],WINH[ws]);}ws=0;ui_select("Window size",&ws,WINN,6,63,0);}   /* static: the dropdown writes here after this function returns */
     {int fs=fullscreen;if(ui_check("Full screen",&fs)){fullscreen=fs;plat_fullscreen(fs);}}
     ui_select("Render resolution",&resSet,RESN,7,127,0);
     ui_keys("The picture is drawn at this height and scaled up to fit the window. Lower is faster, which helps on slower computers, especially with the Swirl theme. Native draws at the window's full size.");
@@ -385,8 +388,8 @@ static void settings_panel(double now){
   // ---- Appearance ----
   if(ui_head("Appearance",&sec_open[7],now)){
     ui_keys("These change how the preferences menu looks and reads. They never change the board, the pieces or the text shown during play.");
-    {static const char*FAMN[7]={"DejaVu Sans (default)","Liberation Sans (Arial-like)","Carlito (Calibri-like)","Liberation Serif (Times-like)","Liberation Mono (monospace)","Atkinson Hyperlegible","OpenDyslexic"};
-     ui_select("Font",&uiFam,FAMN,7,127,0);}
+    {
+     ui_select("Font",&uiFam,FONT_NAMES,7,127,0);}
     ui_keys("Atkinson Hyperlegible is designed for low vision, and OpenDyslexic for readers with dyslexia.");
     ui_check("Bold",&uiBold);ui_check("Italic",&uiItal);
     ui_num("Text size (pt)",&uiPt,8,28);
@@ -425,7 +428,7 @@ static void settings_panel(double now){
   if(ui_head("History",&sec_open[6],now)){
     ui_keys("Finished runs are saved on this computer with every setting used, including graphics, sound and controls.");
     ui_num("Date offset from UTC, hours",&clkTzH,-12,14);
-    {static const char*MN2[4]={"00","15","30","45"};int mi2=clkTzM==15?1:clkTzM==30?2:clkTzM==45?3:0;ui_select("Date offset, minutes",&mi2,MN2,4,15,0);clkTzM=mi2*15;}
+    {static const char*MN2[4]={"00","15","30","45"};static int mi2=0,mi2v=0;if(mi2!=mi2v)clkTzM=iclamp(mi2,0,3)*15;mi2=mi2v=clkTzM/15;ui_select("Date offset, minutes",&mi2,MN2,4,15,0);}
     ui_keys("Dates are shown in UTC plus this offset (the same one the real-time clock uses, with its daylight saving switch). 8tris never reads your device's timezone.");
     int shown=imin(nhist,25);static char L[60][400];
     for(i=0;i<shown;i++){
@@ -597,7 +600,9 @@ static void ui_frame(double now){
     select_popup();
   }
   mclicked=0;wheel_acc=0;UF=1;fctx_on=0;
-  if(ui_changed){save_settings();ui_changed=0;}
+  // Changes are written at most a few times a second (a dragged slider changes every frame), and right away when the menu closes.
+  {static int dirty=0;static double last=-1e9;if(ui_changed){dirty=1;ui_changed=0;}
+   if(dirty&&(now-last>=400||!menu||now<last)){save_settings();dirty=0;last=now;}}
 }
 // Returns 1 when the UI used the key.
 static int ui_key(int key,int down){

@@ -8,7 +8,7 @@ static void shot(const char*n){char b[100];snprintf(b,100,"/tmp/8tris-test-pref/
 int main(int argc,char**argv){
   fb=calloc(w*h,4);system("mkdir -p /tmp/8tris-test-pref");
   app_init();app_resize(w,h);run(30);
-  menu=1;int i;for(i=0;i<6;i++)sec_open[i]=1;adv_open=1;themeOn=argc>1;weights[2]=1;pWeights[2]=1;
+  menu=1;int i;for(i=0;i<6;i++)sec_open[i]=1;advp_open=1;themeOn=argc>1;weights[2]=1;pWeights[2]=1;
   hist_load();
   run(3);scr_main.scroll=0;shot("p_all");
   scr_main.scroll=1400;run(3);shot("p_all2");
