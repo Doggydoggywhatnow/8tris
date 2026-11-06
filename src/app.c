@@ -100,7 +100,7 @@ static void clk_ctx(int i){fctx_on=1;fctx_fam=CLK[i].fam;fctx_bold=CLK[i].bold;f
 // Digits all get the width of a "0" so the text does not jitter as the numbers change.
 static double clk_width(double sz,const char*s){double dw=text_w(0,sz,"0"),w=0;for(;*s;s++){char c[2]={*s,0};w+=(*s>='0'&&*s<='9')?dw:text_w(0,sz,c);}return w;}
 static void clk_string(int i,char*s,int n){
-  if(i==0){int sec=(int)floor(playMs/1000);if(sec>=3600)snprintf(s,n,"%d:%02d:%02d",sec/3600,sec/60%60,sec%60);else snprintf(s,n,"%d:%02d",sec/60,sec%60);return;}
+  if(i==0){int sec=(int)floor(playMs/1000);if(timerMs){int ms=(int)floor(playMs)%1000;if(sec>=3600)snprintf(s,n,"%d:%02d:%02d.%03d",sec/3600,sec/60%60,sec%60,ms);else snprintf(s,n,"%d:%02d.%03d",sec/60,sec%60,ms);return;}if(sec>=3600)snprintf(s,n,"%d:%02d:%02d",sec/3600,sec/60%60,sec%60);else snprintf(s,n,"%d:%02d",sec/60,sec%60);return;}
   // Real time: the device's UTC clock plus the offset typed in the preferences. The device's own timezone is never read.
   int off=(clkTzH<0?-1:1)*(abs(clkTzH)*60+clkTzM)+(clkDst?60:0);
   time_t t=time(NULL)+(time_t)off*60;struct tm*g=gmtime(&t);if(!g){snprintf(s,n,"--:--");return;}

@@ -8,12 +8,12 @@ You open it to a black board and plain gray blocks. Everything else is opt-in: a
 
 ## Download
 
-Latest version: **0.7.9**. Download the file for your system from the [`downloads`](downloads) folder (click the file, then the download button).
+Latest version: **0.7.10**. Download the file for your system from the [`downloads`](downloads) folder (click the file, then the download button).
 
 | Platform | File | Notes |
 |---|---|---|
-| Linux (x86_64) | [`8tris-0.7.9-x86_64.AppImage`](downloads/8tris-0.7.9-x86_64.AppImage) | `chmod +x` it and run. Uses your system's SDL2 when it has one (then glibc 2.34 or newer is enough), otherwise its own bundled copy (glibc 2.38 or newer). |
-| Windows (x86_64) | [`8tris-0.7.9.exe`](downloads/8tris-0.7.9.exe) | Not code-signed, so SmartScreen may warn. Choose "More info", then "Run anyway". |
+| Linux (x86_64) | [`8tris-0.7.10-x86_64.AppImage`](downloads/8tris-0.7.10-x86_64.AppImage) | `chmod +x` it and run. Uses your system's SDL2 when it has one (then glibc 2.34 or newer is enough), otherwise its own bundled copy (glibc 2.38 or newer). |
+| Windows (x86_64) | [`8tris-0.7.10.exe`](downloads/8tris-0.7.10.exe) | Not code-signed, so SmartScreen may warn. Choose "More info", then "Run anyway". |
 
 See the [changelog](CHANGELOG.md) for what changed in each version.
 
@@ -36,6 +36,7 @@ Preferences and score history are saved in a folder on your computer and are nev
 - **Combo song.** An optional mode (Sound tab) where a combo chain plays a song that builds for as long as the chain lasts. Keep it going and see where it goes.
 - **Your own music.** Drop .mp3, .ogg, .wav or .flac files in the music folder (shown in Preferences, Sound) and play one track, all in order, or shuffled. Optionally show the track title, artist, album and cover art on screen, read from the file's own tags. Files are only read locally.
 - **Brightness for the whole game.** One slider in Appearance dims or brightens everything on screen, menus included. Every slider's value is also a box you can click and type an exact number into.
+- **Game timer** can show milliseconds (a tickbox in its theming options).
 - **Filters.** Brightness, contrast, saturation, hue shift, color split, tint, picture opacity and invert, over any theme.
 - **Timer and clock.** An optional play timer and a real-time clock (you type your own UTC offset; 8tris never looks up your timezone), each with its own position, size, opacity, font and bold, and able to stack.
 - **Layout.** Move the board anywhere in the play area, move the Preferences button, and choose how many upcoming pieces to see (0 to 10).

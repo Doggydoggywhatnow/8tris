@@ -326,6 +326,7 @@ static void settings_panel(double now){
          snprintf(L[i][3],40,"%s opacity",NM[i]);snprintf(b,sizeof b,"%d%%",CLK[i].op);ui_slider(L[i][3],&CLK[i].op,10,100,b);
          snprintf(L[i][4],40,"%s font",NM[i]);ui_select(L[i][4],&CLK[i].fam,FONT_NAMES,7,127,0);
          snprintf(L[i][5],40,"%s bold",NM[i]);ui_check(L[i][5],&CLK[i].bold);
+         if(i==0)ui_check("Show milliseconds",&timerMs);
          if(i==0)ui_keys("Counts play time only: it stops while paused or in this menu, and starts over with each game. In the side panel the size shrinks to fit.");
        }
      }

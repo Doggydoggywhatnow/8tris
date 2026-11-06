@@ -2,6 +2,9 @@
 
 Versions are `major.minor.patch`. Until about ten changes have built up, new features are shipped as patch releases, so a patch number here can include features. This file is the real record of what changed.
 
+## 0.7.10
+- The game timer has a new **Show milliseconds** tickbox (Theming, with the timer's other options). It shows time as 1:23.456, and it is saved with your preferences.
+
 ## 0.7.9
 - New theme **Milk:** cream-white page and board, white pieces with a pale blue-grey edge, soft slate text. Available for every part (page, side panel, menu, frame, board, grid, pieces, landing outline, effects) and with its own sound voice: smooth sine and triangle tones, long soft notes, a roomy tail and a lydian scale.
 - **8tris Light, Graphite, 8tris Dark and Chocolate now have sound voices of their own** (Light: bright and airy; Graphite: dry and tight; Dark: deep and moody; Chocolate: warm and mellow) instead of borrowing the 8tris voice.

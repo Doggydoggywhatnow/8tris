@@ -50,11 +50,12 @@ int main(void){
   // a music file name with a path in it is refused (it could point outside the music folder)
   reset_defaults();put("musicfile=../../etc/passwd\n");load_settings();CHK(musFile[0]==0);
   // 6. save -> load is lossless for every key: load file A (everything changed), save, load file B (a different set), reload A's save, save again
-  {const char*A="grid=17,33\nslots=3\nfall=7.25\nlvl=1\nclear=0\nsd=77\nvol=35\nthemeOn=1\ncalm=1\nfxm=1\nadv=1,2,3,0\nsolid=abcdef,123456,0\nui=3,1,0,19,1,2,1,45\nbright=80\nres=2\nfps=5\nshowfps=1\ncombosong=1\nnowplay=1,3,22,55,4,1,1,96,1\nmusic=2,41\nmusicfile=song.mp3\nnext=9\nprefbtn=4\nboardpos=23,77\ntimer=1,5,40,66,2,1\nclock=1,6,28,44,5,0,-7,45,1,1,1\nstack=1,1\nfilters=12,110,130,200,9,25,70,1,aabbcc\nweights=3,0,1,2,3,4,5,6,7,8,9\ntw=9,8,7,6,5,4,3\n";
+  {const char*A="grid=17,33\nslots=3\nfall=7.25\nlvl=1\nclear=0\nsd=77\nvol=35\nthemeOn=1\ncalm=1\nfxm=1\nadv=1,2,3,0\nsolid=abcdef,123456,0\nui=3,1,0,19,1,2,1,45\ntimerms=1\nbright=80\nres=2\nfps=5\nshowfps=1\ncombosong=1\nnowplay=1,3,22,55,4,1,1,96,1\nmusic=2,41\nmusicfile=song.mp3\nnext=9\nprefbtn=4\nboardpos=23,77\ntimer=1,5,40,66,2,1\nclock=1,6,28,44,5,0,-7,45,1,1,1\nstack=1,1\nfilters=12,110,130,200,9,25,70,1,aabbcc\nweights=3,0,1,2,3,4,5,6,7,8,9\ntw=9,8,7,6,5,4,3\n";
    const char*B="grid=5,6\nslots=9\nfall=0.1\nvol=99\nnext=1\nprefbtn=1\nstack=0,0\nclock=0,0,12,10,0,0,3,0,0,0,0\n";
    reset_defaults();put(A);load_settings();save_settings();char s1[8000],s2[8000];rd_set(s1,sizeof s1);
    CHK(W==17&&H==33&&slots==3&&fabs(fallV-7.25)<1e-9&&sdRate==77&&gBright==80&&NQ==9&&prefBtn==4&&boardPX==23&&boardPY==77&&comboSong==1&&showFps==1&&resSet==2&&fpsSet==5);
    CHK(NP.on==1&&NP.pos==3&&NP.sz==22&&npArt==1&&npArtSz==96&&npArtist==1&&musMode==2&&musVol==41&&!strcmp(musFile,"song.mp3"));
+   CHK(timerMs==1);{char ts[32];playMs=83456.7;clk_string(0,ts,sizeof ts);CHK(!strcmp(ts,"1:23.456"));playMs=3723004;clk_string(0,ts,sizeof ts);CHK(!strcmp(ts,"1:02:03.004"));timerMs=0;playMs=83456.7;clk_string(0,ts,sizeof ts);CHK(!strcmp(ts,"1:23"));timerMs=1;}
    CHK(CLK[1].on==1&&CLK[1].pos==6&&clkTzH==-7&&clkTzM==45&&clkDst==1&&clk24==1&&clkSecs==1&&stackV==1&&stackFirst==1);
    CHK(fltBri==12&&fltCon==110&&fltSat==130&&fltHue==200&&fltSplit==9&&fltTint==25&&fltOp==70&&fltInv==1&&(fltTintC&0xFFFFFF)==0xaabbcc);
    put(B);load_settings();put(s1);load_settings();save_settings();rd_set(s2,sizeof s2);
