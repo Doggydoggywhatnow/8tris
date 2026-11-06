@@ -43,7 +43,7 @@ int main(int argc,char**argv){
   if(!ren)ren=SDL_CreateRenderer(win,-1,SDL_RENDERER_SOFTWARE);
   if(!ren){fprintf(stderr,"8tris: could not create a renderer: %s\n",SDL_GetError());return 1;}
   app_init();
-  SDL_AudioSpec want,have;SDL_zero(want);want.freq=44100;want.format=AUDIO_F32SYS;want.channels=2;want.samples=1024;want.callback=audio_cb;
+  SDL_AudioSpec want,have;SDL_zero(want);want.freq=44100;want.format=AUDIO_F32SYS;want.channels=2;want.samples=512;want.callback=audio_cb;
   SDL_AudioDeviceID dev=SDL_OpenAudioDevice(NULL,0,&want,&have,0);
   if(dev)SDL_PauseAudioDevice(dev,0);else fprintf(stderr,"8tris: no audio device (%s); continuing without sound\n",SDL_GetError());
   int w=900,h=700;SDL_GetWindowSize(win,&w,&h);app_resize(w,h);

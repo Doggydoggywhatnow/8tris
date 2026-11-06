@@ -133,17 +133,6 @@ static int ui_num(const char*lab,int*v,int lo,int hi){
   else{snprintf(b,16,"%d",*v);text_mid(0,U(14),x+U(8),y,h,P.fg,1,b);}
   return 0;
 }
-// Number box for a decimal value (used where a rate can be typed exactly, like 0.75).
-static int ui_numd(const char*lab,double*v,double lo,double hi,double*out){
-  int y=cy,x=PX+PW-CWd(),w=CWd(),h=U(30);unsigned id=hid(lab,3);cy+=U(36);if(!vis(y,h))return 0;
-  label(y,lab);
-  if(uhit(x,y,w,h)&&focus_id!=id){focus_commit();focus_id=id;f_fresh=1;snprintf(fbuf,sizeof fbuf,"%.2f",*v);{int n=(int)strlen(fbuf);while(n>1&&fbuf[n-1]=='0'){fbuf[--n]=0;}if(n>0&&fbuf[n-1]=='.')fbuf[n-1]=0;}f_ptr=NULL;f_dptr=out;f_lo=(int)(lo*1000);f_hi=(int)(hi*1000);}
-  box(x,y,w,h,0);char b[16];
-  if(focus_id==id){f_x=x;f_y=y;f_w=w;f_h=h;snprintf(b,16,"%s",fbuf);border_in(x,y,w,h,2,P.fg,1);if(f_fresh)fill_rect(x+U(8),y+U(5),text_w(0,U(14),b),h-U(10),P.fg,.35);text_mid(0,U(14),x+U(8),y,h,P.fg,1,b);
-    if(((int)(NOW/500))%2)fill_rect(x+U(8)+text_w(0,U(14),b)+1,y+U(6),1,h-U(12),P.fg,1);}
-  else{snprintf(b,16,"%.2f",*v);text_mid(0,U(14),x+U(8),y,h,P.fg,1,b);}
-  return 0;
-}
 static void fall_typed(double rate);
 // Fall rate: drag the slider, or click the number and type an exact rate (rows per second; a typed rate may go past the slider's ends).
 static void ui_fall(void){
@@ -670,7 +659,6 @@ static void about_popup(double now){
 }
 
 // ---- Per-frame entry points ----
-static int menu_visible(void){return menu&&!pv_on;}
 static void ui_frame(double now){
   UF=(menu&&!pv_on)?1.25*uiPt/14.0:1;fctx_on=(menu&&!pv_on);fctx_fam=uiFam;fctx_bold=uiBold;fctx_ital=uiItal;pal_update();
   if(hx_id&&mclicked&&!(clx>=hx_x&&clx<hx_x+hx_w&&cly>=hx_y&&cly<hx_y+hx_h))hx_commit();

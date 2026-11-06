@@ -8,8 +8,7 @@ static void layout_internal(void){
   int cap=RES_H[resSet],rw=winW,rh=winH;
   if(cap>0&&winH>cap){rh=cap;rw=imax(160,(int)((double)winW*cap/winH+.5));}
   WW=imax(rw,160);WH=imax(rh,120);UZ=imax(1,imin(WW,WH)/900);last_res=resSet;
-  AW=WW/4+1;AH=WH/4+1;free(ANG);ANG=(float*)malloc(sizeof(float)*AW*AH);
-  int x,y;for(y=0;y<AH;y++)for(x=0;x<AW;x++)ANG[y*AW+x]=(float)(atan2(y*4+2-WH/2.0,x*4+2-WW/2.0)*180/3.14159265+180);
+  AW=WW/4+1;AH=WH/4+1;free(ANG);ANG=NULL;   // the Wild page's angle table is built the first time it is drawn (see ang_table)
   free(RB);RB=(u32*)calloc((size_t)WW*WH,4);
 }
 void app_resize(int w,int h){winW=imax(w,160);winH=imax(h,120);layout_internal();}
@@ -20,7 +19,12 @@ static void cone_lut(u32*lut,const u32*stops,int n){
   int d;for(d=0;d<360;d++){double pos=d/360.0*(n-1);int i=(int)pos;if(i>=n-1)i=n-2;double k=pos-i;u32 a=stops[i],b=stops[i+1];
     int r=(int)(((a>>16)&255)*(1-k)+((b>>16)&255)*k),g=(int)(((a>>8)&255)*(1-k)+((b>>8)&255)*k),bl=(int)((a&255)*(1-k)+(b&255)*k);lut[d]=RGB(r,g,bl);}
 }
+static void ang_table(void){
+  int x,y;ANG=(float*)malloc(sizeof(float)*AW*AH);
+  for(y=0;y<AH;y++)for(x=0;x<AW;x++)ANG[y*AW+x]=(float)(atan2(y*4+2-WH/2.0,x*4+2-WW/2.0)*180/3.14159265+180);
+}
 static void wild_page(double now){
+  if(!ANG)ang_table();
   static const u32 sa[8]={HEX(0xff0080),HEX(0xff8c00),HEX(0xffee00),HEX(0x00e676),HEX(0x00e5ff),HEX(0x2979ff),HEX(0xd500f9),HEX(0xff0080)};
   static const u32 sb[6]={HEX(0x00e5ff),HEX(0xd500f9),HEX(0xff0080),HEX(0xffee00),HEX(0x00e676),HEX(0x00e5ff)};
   static u32 la[360],lb[360];static int ready=0;if(!ready){cone_lut(la,sa,8);cone_lut(lb,sb,6);ready=1;}
