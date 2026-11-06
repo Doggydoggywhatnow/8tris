@@ -1,6 +1,6 @@
 // ===== MUSIC FROM LOCAL FILES =====
 // Plays .mp3, .ogg, .wav and .flac files the user puts in the "music" folder next to the saved preferences. Files are read only from
-// this computer, decoded in a background thread into memory (stereo, 44.1 kHz, 16 bit), and never copied, uploaded or tracked.
+// this computer, streamed from the file by a background thread (any length; a few seconds are held at a time), and never copied, uploaded or tracked.
 // Decoders: dr_mp3, dr_flac, dr_wav (David Reid) and stb_vorbis (Sean Barrett), all public domain or MIT-0.
 #include <stdint.h>
 #include <ctype.h>
@@ -109,12 +109,36 @@ static void meta_id3v2(Meta*m,const unsigned char*b,int n){
     #undef IS
     pos+=hl+(int)fs;}
 }
+// How much of the start of a file holds its tags, so only that much is read (a multi-hour file is never pulled into memory).
+static int meta_need(const char*path,const char*x){
+  FILE*f=fopen(path,"rb");if(!f)return 0;unsigned char h[10];long need=0;
+  if(!strcmp(x,"mp3")){if(fread(h,1,10,f)==10&&!memcmp(h,"ID3",3))need=10+(long)((h[6]&127)<<21|(h[7]&127)<<14|(h[8]&127)<<7|(h[9]&127))+((h[5]&0x10)?10:0);}
+  else if(!strcmp(x,"flac")){if(fread(h,1,4,f)==4&&!memcmp(h,"fLaC",4)){long pos=4;int k;for(k=0;k<128;k++){if(fread(h,1,4,f)!=4)break;long len=(long)h[1]<<16|h[2]<<8|h[3];pos+=4+len;if(h[0]&128)break;if(fseek(f,len,SEEK_CUR))break;}need=pos;}}
+  else if(!strcmp(x,"ogg"))need=4*1024*1024;
+  fclose(f);return need>24*1024*1024?24*1024*1024:(int)need;}
+// WAV tags sit in chunks that may come after hours of audio: walk the chunk headers and read only the tag chunks.
+static void meta_wav(const char*path,Meta*m){
+  FILE*f=fopen(path,"rb");if(!f)return;unsigned char h[12];if(fread(h,1,12,f)!=12||memcmp(h,"RIFF",4)){fclose(f);return;}
+  int k;for(k=0;k<1000;k++){if(fread(h,1,8,f)!=8)break;unsigned cl=rd_le32(h+4);
+    int tag=!memcmp(h,"LIST",4)||!memcmp(h,"id3 ",4)||!memcmp(h,"ID3 ",4);
+    if(tag&&cl<=24u*1024*1024){unsigned char*cd=(unsigned char*)malloc(cl+1);if(!cd)break;if(fread(cd,1,cl,f)!=cl){free(cd);break;}
+      if(!memcmp(h,"LIST",4)&&cl>=4&&!memcmp(cd,"INFO",4)){unsigned q=4;while(q+8<=cl){unsigned sl=rd_le32(cd+q+4);if(sl>cl-q-8)break;
+          if(!memcmp(cd+q,"INAM",4)&&!m->title[0])meta_set(m->title,sizeof m->title,(const char*)cd+q+8,(int)sl);
+          else if(!memcmp(cd+q,"IART",4)&&!m->artist[0])meta_set(m->artist,sizeof m->artist,(const char*)cd+q+8,(int)sl);
+          else if(!memcmp(cd+q,"IPRD",4)&&!m->album[0])meta_set(m->album,sizeof m->album,(const char*)cd+q+8,(int)sl);
+          q+=8+sl+(sl&1);}}
+      else if(memcmp(h,"LIST",4))meta_id3v2(m,cd,(int)cl);
+      free(cd);if(cl&1)fseek(f,1,SEEK_CUR);}
+    else if(fseek(f,(long)cl+(long)(cl&1),SEEK_CUR))break;}
+  fclose(f);}
 static void meta_read(const char*path,Meta*m){
   memset(m,0,sizeof*m);const char*e=strrchr(path,'.');char x[8]={0};int i;if(e)for(i=0;e[i+1]&&i<6;i++)x[i]=(char)tolower((unsigned char)e[i+1]);
-  int n=0;unsigned char*b=slurp(path,24*1024*1024,&n);if(!b)return;
+  int n=0;unsigned char*b=NULL;if(strcmp(x,"wav")){int need=meta_need(path,x);if(need>0)b=slurp(path,need,&n);}   /* only the tag area */
+  if(!b){b=(unsigned char*)calloc(1,1);n=0;}
   if(!strcmp(x,"mp3")){
     meta_id3v2(m,b,n);
-    if((!m->title[0])&&n>=128&&!memcmp(b+n-128,"TAG",3)){const unsigned char*t=b+n-128;meta_set(m->title,sizeof m->title,(const char*)t+3,30);if(!m->artist[0])meta_set(m->artist,sizeof m->artist,(const char*)t+33,30);if(!m->album[0])meta_set(m->album,sizeof m->album,(const char*)t+63,30);}   // old-style ID3v1 tag at the very end
+    unsigned char tl[128];int tn=0;{FILE*f=fopen(path,"rb");if(f){if(fseek(f,-128,SEEK_END)==0)tn=(int)fread(tl,1,128,f);fclose(f);}}   /* the old tag sits at the very end, which may be past what was read for a long file */
+    if((!m->title[0])&&tn==128&&!memcmp(tl,"TAG",3)){const unsigned char*t=tl;meta_set(m->title,sizeof m->title,(const char*)t+3,30);if(!m->artist[0])meta_set(m->artist,sizeof m->artist,(const char*)t+33,30);if(!m->album[0])meta_set(m->album,sizeof m->album,(const char*)t+63,30);}   // old-style ID3v1 tag at the very end
   }else if(!strcmp(x,"flac")&&n>8&&!memcmp(b,"fLaC",4)){
     int pos=4;for(;;){if(pos+4>n)break;int last=b[pos]&128,type=b[pos]&127;unsigned len=(unsigned)b[pos+1]<<16|b[pos+2]<<8|b[pos+3];pos+=4;if(len>(unsigned)(n-pos))break;
       if(type==4)vorbis_comments(m,b+pos,(int)len,NULL);else if(type==6&&!m->art)flac_picture(m,b+pos,(int)len);
@@ -129,33 +153,26 @@ static void meta_read(const char*path,Meta*m){
       pos+=27+ns+dsz;if(npk==0&&pos>1<<20)break;}
     if(pk&&plen>7&&pk[0]==3&&!memcmp(pk+1,"vorbis",6))vorbis_comments(m,pk+7,plen-7,flac_picture);
     free(pk);
-  }else if(!strcmp(x,"wav")&&n>12&&!memcmp(b,"RIFF",4)){
-    int pos=12;while(pos+8<=n){unsigned cl=rd_le32(b+pos+4);const unsigned char*cd=b+pos+8;if(cl>(unsigned)(n-pos-8))cl=(unsigned)(n-pos-8);
-      if(!memcmp(b+pos,"LIST",4)&&cl>=4&&!memcmp(cd,"INFO",4)){unsigned q=4;while(q+8<=cl){unsigned sl=rd_le32(cd+q+4);if(sl>cl-q-8)break;
-          if(!memcmp(cd+q,"INAM",4)&&!m->title[0])meta_set(m->title,sizeof m->title,(const char*)cd+q+8,(int)sl);
-          else if(!memcmp(cd+q,"IART",4)&&!m->artist[0])meta_set(m->artist,sizeof m->artist,(const char*)cd+q+8,(int)sl);
-          else if(!memcmp(cd+q,"IPRD",4)&&!m->album[0])meta_set(m->album,sizeof m->album,(const char*)cd+q+8,(int)sl);
-          q+=8+sl+(sl&1);}}
-      else if(!memcmp(b+pos,"id3 ",4)||!memcmp(b+pos,"ID3 ",4))meta_id3v2(m,cd,(int)cl);
-      pos+=8+(int)cl+(int)(cl&1);}
-  }
+  }else if(!strcmp(x,"wav"))meta_wav(path,m);
   free(b);
   if(!m->title[0]){const char*s=strrchr(path,'/');s=s?s+1:path;const char*bs=strrchr(s,'\\');if(bs)s=bs+1;int len=(int)strlen(s);const char*dot=strrchr(s,'.');if(dot)len=(int)(dot-s);meta_set(m->title,sizeof m->title,s,len);}   // no title tag: the file name
 }
 
 
-#define MUS_MAXMIN 10        // longest track accepted, in minutes (it is held in memory: about 10 MB per minute)
 #define MUS_MAXFILES 100
 static int musMode=0,musVol=50;                 // 0 off, 1 repeat one track, 2 all in order, 3 all shuffled; volume %
+static int musPaused=0;                         // the on-screen pause button stopped the music where it was (not saved)
 static char musFile[256];                       // the track chosen for "repeat one" (saved by file name)
 static char musFold[256];                       // "" = every track; otherwise only tracks inside this folder (and its folders) are played
 static char mfold[MUS_MAXFILES][256];static int nfold=0;
-static char mfiles[MUS_MAXFILES][256];static int nmfiles=0,musSel=0,musCur=-1;
+static char mfiles[MUS_MAXFILES][256];static int nmfiles=0,musSel=0,musCur=-1,mus_have=0;   // mus_have: a track is open and playing (main thread)
 static char mus_status[200]="";static int mus_failed=0,mus_tries=0,mus_prevMode=0,mus_prevSel=-1;static char mus_prevFold[256];
-// Audio thread side: the loaded track. Changed only under plat_lock.
-static int16_t*mus_buf=NULL;static i64 mus_len=0,mus_pos=0;static int mus_ended=0;
-// Loader side: a worker thread fills job_* and then sets mus_job to 2.
-static volatile int mus_job=0;static int16_t*job_buf=NULL;static i64 job_len=0;static char job_path[700],job_err[120],job_name[256];static int job_idx=-1;static Meta job_meta,cur_meta;
+// Tracks are streamed: a decoder thread keeps a few seconds of audio ready in a ring, so any length works (multi-hour audiobooks too)
+// and memory use stays the same. The ring is written only by the decoder and read only by the audio thread.
+#define MR_FRAMES (1<<18)                         // about 6 seconds, stereo float (2 MB)
+static float mr_buf[MR_FRAMES*2];static i64 mr_w=0,mr_r=0;static int mr_live=0,mr_eof=0,mus_ended=0;static i64 mus_played=0;
+// Hand-over between the main thread and the decoder, always under plat_lock: a command (1 open job_path, 2 close) and its result.
+static int sc_cmd=0,sc_seq=0,sc_res=0,sc_res_seq=0;static char job_path[700],job_err[120],job_name[256];static int job_idx=-1,mus_job=0;static Meta job_meta,cur_meta;
 
 
 static const char* music_dir(void){static char d[700];snprintf(d,sizeof d,"%smusic",plat_pref_dir());return d;}
@@ -197,84 +214,140 @@ static void music_scan(void){
   mus_failed=0;mus_tries=0;
 }
 
-// ---- Decoding: any supported file becomes stereo 44.1 kHz 16-bit. Sample rates are converted by linear interpolation. ----
-typedef struct{int16_t*buf;i64 n,cap,limit;double ratio,ph;float pl,pr;int have,over;}Rs;
-static void rs_emit(Rs*r,float l,float rr){
-  if(r->n>=r->limit){r->over=1;return;}
-  if(r->n>=r->cap){i64 nc=r->cap?r->cap*2:1<<20;int16_t*nb=(int16_t*)realloc(r->buf,(size_t)nc*4);if(!nb){r->over=1;return;}r->buf=nb;r->cap=nc;}
-  l=l>1?1:l<-1?-1:l;rr=rr>1?1:rr<-1?-1:rr;r->buf[r->n*2]=(int16_t)(l*32767);r->buf[r->n*2+1]=(int16_t)(rr*32767);r->n++;
+// ---- Decoding: any supported file is streamed as stereo 44.1 kHz float. Other sample rates go through a windowed-sinc resampler
+// (32 taps, Kaiser window, low-passed below the lower Nyquist) so nothing aliases; 44.1 kHz files pass straight through. Samples are
+// kept as floats with no clipping; the one limiter at the very end of the mix keeps the output clean. ----
+#define RS_HALF 16
+#define RS_TAPS (2*RS_HALF)
+#define RS_PH 1024
+#define RS_IN 8192
+typedef struct{double ratio,t;int pass,n;float fl[RS_IN+RS_TAPS],fr[RS_IN+RS_TAPS];float*h;}Rs;
+static double rs_bessel0(double x){double s=1,t=1;int k;for(k=1;k<30;k++){t*=(x/(2*k))*(x/(2*k));s+=t;}return s;}
+static void rs_init(Rs*r,int rate){
+  r->ratio=rate/44100.0;r->pass=rate==44100;r->t=RS_HALF-1;r->n=0;memset(r->fl,0,sizeof r->fl);memset(r->fr,0,sizeof r->fr);
+  r->n=RS_HALF-1;   /* leading silence so the first output lines up with the first input frame */
+  if(r->pass)return;
+  if(!r->h)r->h=(float*)malloc(sizeof(float)*(RS_PH+1)*RS_TAPS);if(!r->h){r->pass=1;return;}
+  double fc=(r->ratio>1?1/r->ratio:1)*.94,beta=8.0,ib=1/rs_bessel0(beta);int p,k;
+  for(p=0;p<=RS_PH;p++){double fr=(double)p/RS_PH,sum=0;float*row=r->h+p*RS_TAPS;
+    for(k=0;k<RS_TAPS;k++){double x=k-(RS_HALF-1)-fr,sx=fc*x,v=fabs(sx)<1e-9?fc:fc*sin(M_PI*sx)/(M_PI*sx),q=x/RS_HALF,w=fabs(q)>=1?0:rs_bessel0(beta*sqrt(1-q*q))*ib;row[k]=(float)(v*w);sum+=v*w;}
+    for(k=0;k<RS_TAPS;k++)row[k]=(float)(row[k]/sum);}   // each phase sums to exactly 1: no level change, no DC ripple
 }
-static void rs_push(Rs*r,const float*in,int ch,int nf){
-  int i;for(i=0;i<nf&&!r->over;i++){float l=in[i*ch],rr=ch>1?in[i*ch+1]:l;
-    if(!r->have){r->pl=l;r->pr=rr;r->have=1;r->ph=0;}
-    while(r->ph<1&&!r->over){float f=(float)r->ph;rs_emit(r,r->pl+(l-r->pl)*f,r->pr+(rr-r->pr)*f);r->ph+=r->ratio;}
-    r->ph-=1;r->pl=l;r->pr=rr;}
+// Feeds stereo frames in; writes resampled frames to out (up to cap), returns how many were written.
+static int rs_run(Rs*r,const float*in,int nf,float*out,int cap){
+  int o=0,i;
+  if(r->pass){for(i=0;i<nf&&o<cap;i++){out[2*o]=in[2*i];out[2*o+1]=in[2*i+1];o++;}return o;}
+  for(i=0;i<nf;i++){r->fl[r->n]=in[2*i];r->fr[r->n]=in[2*i+1];r->n++;
+    while(o<cap){int b=(int)r->t;if(b+RS_HALF+1>r->n)break;double fr=(r->t-b)*RS_PH;int ph=(int)fr;if(ph>=RS_PH)ph=RS_PH-1;float pa=(float)(fr-ph);const float*h0=r->h+ph*RS_TAPS,*h1=h0+RS_TAPS;const float*xl=r->fl+b-(RS_HALF-1),*xr=r->fr+b-(RS_HALF-1);
+      float sl=0,sr=0;int k;for(k=0;k<RS_TAPS;k++){float c=h0[k]+(h1[k]-h0[k])*pa;sl+=c*xl[k];sr+=c*xr[k];}   /* between two phase rows: no phase steps */out[2*o]=sl;out[2*o+1]=sr;o++;r->t+=r->ratio;}
+    if(r->n>=RS_IN){int d=(int)r->t-(RS_HALF-1);if(d>0){memmove(r->fl,r->fl+d,sizeof(float)*(r->n-d));memmove(r->fr,r->fr+d,sizeof(float)*(r->n-d));r->n-=d;r->t-=d;}}}
+  return o;
 }
-// Returns the decoded track (caller frees) or NULL with a reason in err.
-static int16_t* music_decode(const char*path,i64*frames,char*err,int errn){
-  const char*e=strrchr(path,'.');char x[8]={0};int i;if(e)for(i=0;e[i+1]&&i<6;i++)x[i]=(char)tolower((unsigned char)e[i+1]);
-  Rs r;memset(&r,0,sizeof r);r.limit=(i64)MUS_MAXMIN*60*44100;static float tmp[4096*8];int ch=0,rate=0,ok=0;
-  if(!strcmp(x,"mp3")){drmp3 m;if(drmp3_init_file(&m,path,NULL)){ch=m.channels;rate=m.sampleRate;if(ch>0&&ch<=8&&rate>0){r.ratio=rate/44100.0;ok=1;
-      for(;;){drmp3_uint64 n=drmp3_read_pcm_frames_f32(&m,4096,tmp);if(!n)break;rs_push(&r,tmp,ch,(int)n);if(r.over)break;}}drmp3_uninit(&m);}}
-  else if(!strcmp(x,"wav")){drwav w;if(drwav_init_file(&w,path,NULL)){ch=w.channels;rate=w.sampleRate;if(ch>0&&ch<=8&&rate>0){r.ratio=rate/44100.0;ok=1;
-      for(;;){drwav_uint64 n=drwav_read_pcm_frames_f32(&w,4096,tmp);if(!n)break;rs_push(&r,tmp,ch,(int)n);if(r.over)break;}}drwav_uninit(&w);}}
-  else if(!strcmp(x,"flac")){drflac*f=drflac_open_file(path,NULL);if(f){ch=f->channels;rate=f->sampleRate;if(ch>0&&ch<=8&&rate>0){r.ratio=rate/44100.0;ok=1;
-      for(;;){drflac_uint64 n=drflac_read_pcm_frames_f32(f,4096,tmp);if(!n)break;rs_push(&r,tmp,ch,(int)n);if(r.over)break;}}drflac_close(f);}}
-  else if(!strcmp(x,"ogg")){int er=0;stb_vorbis*v=stb_vorbis_open_filename(path,&er,NULL);if(v){stb_vorbis_info in=stb_vorbis_get_info(v);ch=2;rate=(int)in.sample_rate;if(rate>0){r.ratio=rate/44100.0;ok=1;
-      for(;;){int n=stb_vorbis_get_samples_float_interleaved(v,2,tmp,4096*2);if(n<=0)break;rs_push(&r,tmp,2,n);if(r.over)break;}}stb_vorbis_close(v);}}
-  if(!ok){snprintf(err,errn,"Could not read this file. It may be damaged or in an unsupported variant.");free(r.buf);return NULL;}
-  if(r.over){snprintf(err,errn,"This track is longer than %d minutes, or too large to hold in memory.",MUS_MAXMIN);free(r.buf);return NULL;}
-  if(r.n<2205){snprintf(err,errn,"This file has no audio in it.");free(r.buf);return NULL;}
-  *frames=r.n;return r.buf;
+// The open track (decoder thread only).
+enum{ST_NONE,ST_MP3,ST_WAV,ST_FLAC,ST_OGG};
+static struct{int kind,ch;drmp3 m;drwav w;drflac*f;stb_vorbis*v;Rs rs;int tail;}ST;
+static void st_close(void){
+  if(ST.kind==ST_MP3)drmp3_uninit(&ST.m);else if(ST.kind==ST_WAV)drwav_uninit(&ST.w);else if(ST.kind==ST_FLAC)drflac_close(ST.f);else if(ST.kind==ST_OGG)stb_vorbis_close(ST.v);
+  ST.kind=ST_NONE;ST.f=NULL;ST.v=NULL;}
+static int st_open(const char*path,char*err,int errn){
+  const char*e=strrchr(path,'.');char x[8]={0};int i,rate=0;if(e)for(i=0;e[i+1]&&i<6;i++)x[i]=(char)tolower((unsigned char)e[i+1]);
+  st_close();
+  if(!strcmp(x,"mp3")){if(drmp3_init_file(&ST.m,path,NULL)){ST.kind=ST_MP3;ST.ch=ST.m.channels;rate=ST.m.sampleRate;}}
+  else if(!strcmp(x,"wav")){if(drwav_init_file(&ST.w,path,NULL)){ST.kind=ST_WAV;ST.ch=ST.w.channels;rate=ST.w.sampleRate;}}
+  else if(!strcmp(x,"flac")){if((ST.f=drflac_open_file(path,NULL))){ST.kind=ST_FLAC;ST.ch=ST.f->channels;rate=ST.f->sampleRate;}}
+  else if(!strcmp(x,"ogg")){int er=0;if((ST.v=stb_vorbis_open_filename(path,&er,NULL))){stb_vorbis_info in=stb_vorbis_get_info(ST.v);ST.kind=ST_OGG;ST.ch=2;rate=(int)in.sample_rate;}}   /* stb_vorbis mixes any channel layout down to 2 */
+  if(!ST.kind||ST.ch<1||ST.ch>8||rate<4000||rate>768000){st_close();snprintf(err,errn,"Could not read this file. It may be damaged or in an unsupported variant.");return 0;}
+  rs_init(&ST.rs,rate);ST.tail=0;return 1;
 }
-static void music_job_fn(void*arg){
-  (void)arg;i64 n=0;job_err[0]=0;job_buf=music_decode(job_path,&n,job_err,sizeof job_err);job_len=job_buf?n:0;meta_free(&job_meta);if(job_buf)meta_read(job_path,&job_meta);
-  __atomic_store_n(&mus_job,2,__ATOMIC_RELEASE);
+static void st_rewind(void){
+  if(ST.kind==ST_MP3)drmp3_seek_to_pcm_frame(&ST.m,0);else if(ST.kind==ST_WAV)drwav_seek_to_pcm_frame(&ST.w,0);else if(ST.kind==ST_FLAC)drflac_seek_to_pcm_frame(ST.f,0);else if(ST.kind==ST_OGG)stb_vorbis_seek_start(ST.v);
+  ST.tail=0;}
+// Decodes one block and returns resampled stereo frames in out (up to cap; cap must be at least 4096*2+64), 0 at the end of the file.
+static int st_read(float*out,int cap){
+  static float raw[4096*8],st2[4096*2];int n=0,i,ch=ST.ch,nin=ST.rs.ratio>=1?4096:(int)(4096*ST.rs.ratio)-RS_TAPS;if(nin<64)nin=64;   /* upsampling: fewer frames in, so the output fits */
+  for(;;){
+    if(ST.kind==ST_MP3)n=(int)drmp3_read_pcm_frames_f32(&ST.m,nin,raw);
+    else if(ST.kind==ST_WAV)n=(int)drwav_read_pcm_frames_f32(&ST.w,nin,raw);
+    else if(ST.kind==ST_FLAC)n=(int)drflac_read_pcm_frames_f32(ST.f,nin,raw);
+    else if(ST.kind==ST_OGG){n=stb_vorbis_get_samples_float_interleaved(ST.v,2,raw,nin*2);if(n<0)n=0;}
+    if(n<=0){   // end of file: push the resampler's last half-window of silence through once, so the very end is not cut off
+      if(ST.rs.pass||ST.tail)return 0;ST.tail=1;memset(st2,0,sizeof(float)*2*(RS_HALF+1));return rs_run(&ST.rs,st2,RS_HALF+1,out,cap);}
+    for(i=0;i<n;i++){const float*q=raw+i*ch;float l,r;   // to stereo: mono is doubled; surround folds centre and rears in
+      if(ch==1)l=r=q[0];else if(ch==2){l=q[0];r=q[1];}
+      else{float c=ch>2?q[2]:0,bl=ch>4?q[4]:0,br=ch>5?q[5]:bl;l=(q[0]+.7071f*c+.7071f*bl)*.5858f;r=(q[1]+.7071f*c+.7071f*br)*.5858f;}
+      if(!(l>-64&&l<64))l=0;if(!(r>-64&&r<64))r=0;st2[2*i]=l;st2[2*i+1]=r;}   /* a broken frame can never turn into a blast */
+    {int o=rs_run(&ST.rs,st2,n,out,cap);if(o>0)return o;}   // downsampling may need more input before the first frame comes out
+  }
 }
+// Decoder thread work: takes a command, or tops up the ring. Returns 1 when it did something (so the caller loops at once).
+static int stream_service(void){
+  static float blk[(4096*2+64)*2];int cmd,seq;
+  plat_lock();cmd=sc_cmd;sc_cmd=0;seq=sc_seq;char path[700];snprintf(path,sizeof path,"%s",job_path);plat_unlock();
+  if(cmd){
+    st_close();plat_lock();mr_live=0;mr_w=mr_r=0;mr_eof=0;mus_ended=0;plat_unlock();
+    if(cmd==1){char err[120]="";int ok=st_open(path,err,sizeof err),got=0;
+      if(ok){meta_free(&job_meta);meta_read(path,&job_meta);
+        while(got<2205){int o=st_read(blk,4096*2+64);if(o<=0)break;memcpy(mr_buf+2*got,blk,sizeof(float)*2*o);got+=o;}   /* the first block goes straight in (ring is empty) */
+        if(got<2205){ok=0;st_close();snprintf(err,sizeof err,"This file has no audio in it.");}}
+      plat_lock();
+      if(ok&&sc_cmd==0&&sc_seq==seq){__atomic_store_n(&mr_w,(i64)got,__ATOMIC_RELEASE);mr_live=1;mus_played=0;}
+      sc_res=ok?2:3;sc_res_seq=seq;snprintf(job_err,sizeof job_err,"%s",err);plat_unlock();}
+    return 1;}
+  if(!ST.kind||mr_eof)return 0;
+  i64 w=mr_w,r=__atomic_load_n(&mr_r,__ATOMIC_ACQUIRE);if(MR_FRAMES-(w-r)<4096*2+64)return 0;   // the ring is full enough
+  int o=st_read(blk,4096*2+64);
+  if(o<=0){if(musMode==1){st_rewind();return 1;}plat_lock();mr_eof=1;plat_unlock();return 0;}   // repeat one loops without a gap
+  int i;for(i=0;i<o;i++){size_t k=(size_t)((w+i)&(MR_FRAMES-1));mr_buf[2*k]=blk[2*i];mr_buf[2*k+1]=blk[2*i+1];}
+  __atomic_store_n(&mr_w,w+o,__ATOMIC_RELEASE);return 1;
+}
+static void mus_stream_fn(void*arg){(void)arg;for(;;){if(!stream_service())plat_sleep(4);}}
+static int st_started=0,st_threaded=0;
 static void music_start(int idx){
-  mus_job=1;job_idx=idx;snprintf(job_name,sizeof job_name,"%s",mfiles[idx]);snprintf(job_path,sizeof job_path,"%s/%s",music_dir(),mfiles[idx]);
+  if(!st_started){st_started=1;st_threaded=plat_thread(mus_stream_fn,NULL);}
+  mus_job=1;job_idx=idx;mus_have=0;snprintf(job_name,sizeof job_name,"%s",mfiles[idx]);
+  plat_lock();mr_live=0;snprintf(job_path,sizeof job_path,"%s/%s",music_dir(),mfiles[idx]);sc_seq++;sc_cmd=1;plat_unlock();
   snprintf(mus_status,sizeof mus_status,"Loading %s...",job_name);
-  if(!plat_thread(music_job_fn,NULL))music_job_fn(NULL);   // no thread available: decode right here
+  if(!st_threaded)stream_service();   // no thread available: open it right here (the main loop keeps the ring topped up)
+}
+static void music_stop(void){
+  plat_lock();mr_live=0;sc_seq++;sc_cmd=2;plat_unlock();if(st_started&&!st_threaded)stream_service();
+  mus_have=0;mus_job=0;meta_free(&cur_meta);musCur=-1;
 }
 // Is track i inside the chosen folder (or are all folders chosen)?
 static int music_in_scope(int i){if(!musFold[0])return 1;size_t L=strlen(musFold);return !strncmp(mfiles[i],musFold,L)&&mfiles[i][L]=='/';}
 static int music_scope_count(void){int i,n=0;for(i=0;i<nmfiles;i++)n+=music_in_scope(i);return n;}
-static void music_stop(void){
-  int16_t*old;plat_lock();old=mus_buf;mus_buf=NULL;mus_len=0;mus_pos=0;mus_ended=0;plat_unlock();free(old);meta_free(&cur_meta);musCur=-1;
-}
-// Mixes the playing track into the output (called from the audio thread, after the sound effects).
+// Mixes the playing track into the output (called from the audio thread, after the sound effects). No clipping here: the final
+// limiter in audio_mix handles the sum. If the decoder ever falls behind, the gap is silence, never old or broken samples.
 static void music_mix(float*out,int n){
-  if(!musMode||musVol<=0)return;
+  if(!musMode||musVol<=0||musPaused)return;
   plat_lock();
-  if(mus_buf&&mus_len>0){float g=(float)musVol/100.0f*0.8f/32768.0f;int i;
-    for(i=0;i<n;i++){
-      if(mus_pos>=mus_len){if(musMode==1)mus_pos=0;else{mus_ended=1;break;}}
-      float l=out[2*i]+mus_buf[mus_pos*2]*g,r=out[2*i+1]+mus_buf[mus_pos*2+1]*g;
-      out[2*i]=l>1?1:l<-1?-1:l;out[2*i+1]=r>1?1:r<-1?-1:r;mus_pos++;}}
+  if(mr_live){float g=(float)musVol/100.0f*0.8f;i64 r=mr_r,av=__atomic_load_n(&mr_w,__ATOMIC_ACQUIRE)-r;int m=av<n?(int)av:n,i;
+    for(i=0;i<m;i++){size_t k=(size_t)((r+i)&(MR_FRAMES-1));out[2*i]+=mr_buf[2*k]*g;out[2*i+1]+=mr_buf[2*k+1]*g;}
+    __atomic_store_n(&mr_r,r+m,__ATOMIC_RELEASE);mus_played+=m;
+    if(m<n&&mr_eof&&r+m==mr_w)mus_ended=1;}
   plat_unlock();
 }
-// Called once per frame from the main thread: installs finished loads and starts the next track when needed.
+// Called once per frame from the main thread: takes finished opens and starts the next track when needed.
 static void music_tick(void){
-  if(__atomic_load_n(&mus_job,__ATOMIC_ACQUIRE)==2){
-    if(job_buf){int16_t*old;plat_lock();old=mus_buf;mus_buf=job_buf;mus_len=job_len;mus_pos=0;mus_ended=0;plat_unlock();free(old);job_buf=NULL;meta_free(&cur_meta);cur_meta=job_meta;memset(&job_meta,0,sizeof job_meta);
-      musCur=job_idx;mus_tries=0;snprintf(mus_status,sizeof mus_status,"Playing %s",job_name);}
-    else{snprintf(mus_status,sizeof mus_status,"%s: %s",job_name,job_err);mus_tries++;if(musMode==1||mus_tries>=music_scope_count())mus_failed=1;
-      else musCur=job_idx;}                 /* in the "all" modes a bad file is skipped */
-    mus_job=0;
-  }
+  if(st_started&&!st_threaded){int k;for(k=0;k<64&&stream_service();k++);}   // no decoder thread: top the ring up from here
+  {int res=0;plat_lock();if(sc_res){if(sc_res_seq==sc_seq&&mus_job==1)res=sc_res;sc_res=0;}plat_unlock();
+   if(res==2){meta_free(&cur_meta);cur_meta=job_meta;memset(&job_meta,0,sizeof job_meta);musCur=job_idx;mus_have=1;mus_tries=0;mus_job=0;snprintf(mus_status,sizeof mus_status,"Playing %s",job_name);}
+   else if(res==3){snprintf(mus_status,sizeof mus_status,"%s: %s",job_name,job_err);mus_tries++;mus_job=0;if(musMode==1||mus_tries>=music_scope_count())mus_failed=1;
+     else musCur=job_idx;}}                 /* in the "all" modes a bad file is skipped */
   if(mus_job==1)return;
   if(strcmp(musFold,mus_prevFold)){snprintf(mus_prevFold,sizeof mus_prevFold,"%s",musFold);   // another folder was chosen
     if(musMode==1&&nmfiles&&!music_in_scope(musSel)){int i;for(i=0;i<nmfiles;i++)if(music_in_scope(i)){musSel=i;snprintf(musFile,sizeof musFile,"%s",mfiles[i]);break;}}
     if(musMode>1&&musCur>=0&&!music_in_scope(musCur)){music_stop();mus_failed=0;mus_tries=0;}}
   if(musMode!=mus_prevMode||(musMode==1&&musSel!=mus_prevSel)){   // the user changed the mode or track
-    mus_prevMode=musMode;mus_prevSel=musSel;mus_failed=0;mus_tries=0;if(!musMode){music_stop();mus_status[0]=0;return;}
-    if(musMode==1||mus_buf){music_stop();}
+    mus_prevMode=musMode;mus_prevSel=musSel;mus_failed=0;mus_tries=0;if(!musMode){music_stop();mus_status[0]=0;musPaused=0;return;}
+    if(musMode==1||mus_have){music_stop();}
   }
   if(!musMode||mus_failed)return;
   if(!nmfiles){snprintf(mus_status,sizeof mus_status,"No music files found yet.");mus_failed=1;return;}
   {int sc=music_scope_count();if(!sc){snprintf(mus_status,sizeof mus_status,"No music files in this folder.");mus_failed=1;return;}}
-  {int need=!mus_buf||mus_ended;
-   if(musMode==1&&mus_buf&&musCur!=musSel)need=1;
+  {int ended;plat_lock();ended=mus_ended;plat_unlock();
+   int need=!mus_have||ended;
+   if(musMode==1&&mus_have&&musCur!=musSel)need=1;
    if(!need)return;
    int idx;
    if(musMode==1)idx=musSel;
@@ -282,6 +355,5 @@ static void music_tick(void){
    else{int sc=music_scope_count(),pick=sc>1?(int)(rnd()*sc):0,k;if(sc>1&&musCur>=0&&music_in_scope(musCur)){int cpos=0;for(k=0;k<musCur;k++)cpos+=music_in_scope(k);if(pick==cpos)pick=(pick+1)%sc;}
      idx=0;for(k=0;k<nmfiles;k++)if(music_in_scope(k)){if(!pick--){idx=k;break;}}}
    if(idx<0||idx>=nmfiles)idx=0;
-   if(musMode!=1&&mus_ended)music_stop();
    music_start(idx);}
 }

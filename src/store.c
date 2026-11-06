@@ -2,7 +2,7 @@
 // The optional play timer (CLK[0]) and real-time clock (CLK[1]), set up in the Theming tab: on, place (0-5 corners/edges, 6 side panel), size pt, opacity %, font family, bold.
 typedef struct{int on,pos,sz,op,fam,bold;}Clk;
 static Clk CLK[2]={{0,2,28,80,0,0},{0,0,28,80,0,0}};
-static Clk NP={0,3,16,85,0,0};static int npArt=1,npArtSz=72,npArtist=1;   // "now playing" text on screen: same style options as the clocks, plus artist/album line and album art
+static Clk NP={0,3,16,85,0,0};static int npArt=1,npArtSz=72,npArtist=1;static int npPause=0,npPausePos=0;   /* npPause: show a pause button; npPausePos 0 = with the track name, 1..6 = a corner or edge */   // "now playing" text on screen: same style options as the clocks, plus artist/album line and album art
 static int clkTzH=0,clkTzM=0,clkDst=0,clk24=1,clkSecs=0,stackV=1,stackFirst=0,timerMs=0;   // clock: UTC offset typed by the user (hours, minutes), daylight saving +1h, 24-hour, seconds; stacking of the two when they share a place
 // Filters over the whole game picture (not the menu): brightness -50..50, contrast %, saturation %, hue degrees, color split px, tint strength %, opacity %, invert, tint color.
 static int fltBri=0,fltCon=100,fltSat=100,fltHue=0,fltSplit=0,fltTint=0,fltOp=100,fltInv=0;static u32 fltTintC=0xFFFF9A3Cu;
@@ -175,7 +175,7 @@ static void save_settings(void){
   if(store_off)return;
   char tmp[640],dst[600];snprintf(dst,sizeof dst,"%s",get_pref_path("settings.txt"));FILE*f=safe_open(dst,tmp,sizeof tmp);if(!f)return;int i;
   fprintf(f,"grid=%d,%d\nslots=%d\nfall=%g\nlvl=%d\nclear=%d\nsd=%d\nvol=%d\nthemeOn=%d\ncalm=%d\nfxm=%d\nadv=%d,%d,%d,%d\nsolid=%06x,%06x,%d\nui=%d,%d,%d,%d,%d,%d,%d,%d\n",W,H,slots,fallV,lvlSys,clearOn,sdRate,(int)floor(snd_vol*100+.5),themeOn,calm,fxMaster,ADV[0],ADV[1],ADV[2],ADV[3],(unsigned)(solidP&0xFFFFFF),(unsigned)(solidG&0xFFFFFF),solidSep,uiFam,uiBold,uiItal,uiPt,hiCon,mwSel,lsSel,ghostStr);
-  fprintf(f,"timerms=%d\nbright=%d\nres=%d\nfps=%d\nshowfps=%d\ncombosong=%d\nnowplay=%d,%d,%d,%d,%d,%d,%d,%d,%d\nmusic=%d,%d\nmusicfile=%s\nmusicfolder=%s\nnext=%d\nprefbtn=%d\nboardpos=%d,%d\ntimer=%d,%d,%d,%d,%d,%d\nclock=%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\nstack=%d,%d\nfilters=%d,%d,%d,%d,%d,%d,%d,%d,%06x\n",timerMs,gBright,resSet,fpsSet,showFps,comboSong,NP.on,NP.pos,NP.sz,NP.op,NP.fam,NP.bold,npArt,npArtSz,npArtist,musMode,musVol,musFile,musFold,NQ,prefBtn,boardPX,boardPY,
+  fprintf(f,"timerms=%d\nbright=%d\nres=%d\nfps=%d\nshowfps=%d\ncombosong=%d\nnowplay=%d,%d,%d,%d,%d,%d,%d,%d,%d\nmusic=%d,%d\nmusicfile=%s\nmusicfolder=%s\npausebtn=%d,%d\nnext=%d\nprefbtn=%d\nboardpos=%d,%d\ntimer=%d,%d,%d,%d,%d,%d\nclock=%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\nstack=%d,%d\nfilters=%d,%d,%d,%d,%d,%d,%d,%d,%06x\n",timerMs,gBright,resSet,fpsSet,showFps,comboSong,NP.on,NP.pos,NP.sz,NP.op,NP.fam,NP.bold,npArt,npArtSz,npArtist,musMode,musVol,musFile,musFold,npPause,npPausePos,NQ,prefBtn,boardPX,boardPY,
     CLK[0].on,CLK[0].pos,CLK[0].sz,CLK[0].op,CLK[0].fam,CLK[0].bold,CLK[1].on,CLK[1].pos,CLK[1].sz,CLK[1].op,CLK[1].fam,CLK[1].bold,clkTzH,clkTzM,clkDst,clk24,clkSecs,stackV,stackFirst,
     fltBri,fltCon,fltSat,fltHue,fltSplit,fltTint,fltOp,fltInv,(unsigned)(fltTintC&0xFFFFFF));
   fprintf(f,"weights=");for(i=1;i<=11;i++)fprintf(f,"%d%s",weights[i],i<11?",":"\n");
@@ -211,6 +211,7 @@ static void load_settings(void){
     else if(!strcmp(k,"showfps"))showFps=atoi(val)!=0;
     else if(!strcmp(k,"combosong"))comboSong=atoi(val)!=0;
     else if(!strcmp(k,"boardpos")){if(parse_ints(val,v,2)==2){boardPX=iclamp(v[0],0,100);boardPY=iclamp(v[1],0,100);}}
+    else if(!strcmp(k,"pausebtn")){if(parse_ints(val,v,2)==2){npPause=v[0]?1:0;npPausePos=iclamp(v[1],0,6);}}
     else if(!strcmp(k,"nowplay")){if(parse_ints(val,v,9)==9){NP.on=v[0]?1:0;NP.pos=iclamp(v[1],0,5);NP.sz=iclamp(v[2],10,48);NP.op=iclamp(v[3],10,100);NP.fam=iclamp(v[4],0,6);NP.bold=v[5]?1:0;npArt=v[6]?1:0;npArtSz=iclamp(v[7],32,256);npArtist=v[8]?1:0;}}
     else if(!strcmp(k,"music")){if(parse_ints(val,v,2)==2){musMode=iclamp(v[0],0,3);musVol=iclamp(v[1],0,100);}}
     else if(!strcmp(k,"musicfile")){size_t L_=strlen(val);while(L_&&(val[L_-1]=='\n'||val[L_-1]=='\r'))L_--;if(L_<sizeof musFile&&!memchr(val,'\\',L_)&&!memchr(val,':',L_)&&val[0]!='/'&&!(L_>=2&&val[0]=='.'&&val[1]=='.')&&!strstr(val,"/..")&&!strstr(val,"//")){memcpy(musFile,val,L_);musFile[L_]=0;}}

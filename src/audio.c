@@ -176,7 +176,19 @@ static void song_limit(float*l,float*r){
   int rp=(slim_pos+1)&63;*l=slim_dl[rp]*slim_gain;*r=slim_dr[rp]*slim_gain;slim_pos=rp;
 }
 static void music_mix(float*out,int n);
-static void audio_mix(float*out,int n){
+// The very last stage: a stereo look-ahead limiter over effects, song and music together, so their sum can never clip.
+static float olim_g=1,olim_dl[64],olim_dr[64],olim_need[64];static int olim_pos=0;
+static void out_limit(float*l,float*r){
+  static float ceil_=0;if(ceil_==0)ceil_=(float)pow(10,-1.0/20);
+  float a=fmaxf(fabsf(*l),fabsf(*r));if(!(a<1e6f)){*l=*r=0;a=0;}olim_dl[olim_pos]=*l;olim_dr[olim_pos]=*r;olim_need[olim_pos]=a>ceil_?ceil_/a:1;
+  float mn=1;int i;for(i=0;i<64;i++)if(olim_need[i]<mn)mn=olim_need[i];
+  if(mn<olim_g)olim_g+=(mn-olim_g)*.08f;else olim_g+=(1-olim_g)*.0003f;   // smooth attack inside the 64-sample look-ahead, slow release
+  int rp=(olim_pos+1)&63;float x=olim_dl[rp]*olim_g,y=olim_dr[rp]*olim_g;olim_pos=rp;
+  *l=x>1?1:x<-1?-1:x;*r=y>1?1:y<-1?-1:y;}
+static void audio_mix_block(float*out,int n);
+static void audio_mix(float*out,int n){   // any buffer size the system asks for, in blocks
+  while(n>0){int k=n>4096?4096:n;audio_mix_block(out,k);int i;for(i=0;i<k;i++)out_limit(&out[2*i],&out[2*i+1]);out+=2*k;n-=k;}}
+static void audio_mix_block(float*out,int n){
   static float dry[8192],snd[8192],sl[8192],sr[8192],ss[8192];int i,k;if(n>8192)n=8192;
   reverb_init();memset(dry,0,n*4);memset(snd,0,n*4);memset(sl,0,n*4);memset(sr,0,n*4);memset(ss,0,n*4);
   plat_lock();
@@ -188,7 +200,7 @@ static void audio_mix(float*out,int n){
   if(song_bus_on>0){song_bus_on-=n;float g=(float)(snd_vol*SONG_GAIN);
     for(i=0;i<n;i++){float l=sl[i],r=sr[i],w=ss[i];if(!(l>-1e6f&&l<1e6f))l=0;if(!(r>-1e6f&&r<1e6f))r=0;if(!(w>-1e6f&&w<1e6f))w=0;
       float rv=reverb_tick(&rv_song,w)*(float)rv_scale;l=(l+rv)*g;r=(r+rv)*g;song_limit(&l,&r);
-      float a=out[2*i]+l,b=out[2*i+1]+r;out[2*i]=a>1?1:a<-1?-1:a;out[2*i+1]=b>1?1:b<-1?-1:b;}}
+      out[2*i]+=l;out[2*i+1]+=r;}}
   music_mix(out,n);
 }
 

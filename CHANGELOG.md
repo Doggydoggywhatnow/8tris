@@ -2,6 +2,17 @@
 
 Versions are `major.minor.patch`. Until about ten changes have built up, new features are shipped as patch releases, so a patch number here can include features. This file is the real record of what changed.
 
+## 0.7.15
+- **Pause button for music.** An optional button (Preferences, Sound, Pause button) stops and restarts your music with a click, picking up exactly where it stopped. Put it next to the track name (the default) or in any corner or edge of the screen; it takes the track name's size and opacity, and shows a play triangle while paused.
+- **Any length of track, including audiobooks.** Music is now streamed from the file instead of being loaded whole: a three-hour file opens in a few milliseconds and memory use stays flat (about 2 MB for the music player). The 10-minute limit is gone. Tags are read from the start of the file only (and the old ID3v1 tag from its very end), so a long file is never pulled into memory.
+- **Cleaner music sound.** Fixed the causes of distortion:
+  - Loud tracks were hard-clipped twice: once while decoding (peaks above full scale, common in loud masters) and again when music and sound effects added up past full scale. Samples now stay floating point all the way, and one smooth look-ahead limiter at the very end keeps the sum of music, effects and the combo song below full scale.
+  - Files that are not 44.1 kHz (48 kHz is common) were resampled by straight-line interpolation, which adds gritty false tones on cymbals and other bright sounds (about -25 dB on a 10 kHz tone). A 32-tap windowed-sinc resampler replaces it (artifacts now below -79 dB); 44.1 kHz files pass through untouched.
+  - When the system asked for a sound buffer larger than 8192 frames, the rest of the buffer was left unwritten (old samples, heard as crackle). Any size is filled now.
+  - On Windows the sound thread runs at high priority, so a busy frame cannot starve it.
+  - Surround files (5.1) now fold their centre and rear channels into stereo instead of dropping them.
+- Tests: pause button (placement, click, exact resume), real-thread streaming checked sample by sample for drops or repeats, a three-hour file (open time, memory), resampler artifact levels, overload with loud effects, large buffers, and tags in every format.
+
 ## 0.7.14
 - **Music folders.** The music player now scans the folders inside the music folder too (up to four levels deep, hidden folders and links are skipped), listing tracks as "Album/Track.mp3". A new **Folder** choice in Preferences, Sound, Music picks "All folders" or one folder: Play all in order and Play all shuffled then play only that folder (its subfolders included), and the Track list shows only that folder's tracks. The choice is saved, and falls back to all folders if the folder is gone.
 - Long dropdown lists (such as a big Track list) now scroll with the mouse wheel instead of running off the screen. The track limit is 100 files.

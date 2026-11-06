@@ -104,6 +104,7 @@ static LRESULT CALLBACK wndproc(HWND h,UINT m,WPARAM w,LPARAM l){
 static HWAVEOUT wo;static WAVEHDR wh[4];static short wbuf[4][ABUF*2];static HANDLE wev;
 static DWORD WINAPI audio_thread(LPVOID p){
   (void)p;float f[ABUF*2];int i,k;
+  SetThreadPriority(GetCurrentThread(),THREAD_PRIORITY_TIME_CRITICAL);   // a busy frame must never starve the sound (that is heard as crackling)
   for(k=0;k<4;k++){memset(&wh[k],0,sizeof wh[k]);wh[k].lpData=(LPSTR)wbuf[k];wh[k].dwBufferLength=sizeof wbuf[k];waveOutPrepareHeader(wo,&wh[k],sizeof wh[k]);wh[k].dwFlags|=WHDR_DONE;}
   while(running){
     for(k=0;k<4;k++)if(wh[k].dwFlags&WHDR_DONE){app_audio(f,ABUF);for(i=0;i<ABUF*2;i++){float v=f[i];if(v>1)v=1;if(v<-1)v=-1;wbuf[k][i]=(short)(v*32767);}wh[k].dwFlags&=~WHDR_DONE;waveOutWrite(wo,&wh[k],sizeof wh[k]);}

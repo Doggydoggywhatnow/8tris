@@ -82,7 +82,7 @@ static int foot_btn(int*x,int y,const char*lab){int w=btn_w(lab),r=btn_at(*x,y,w
 
 // ---- collapsible groups: a row with an arrow (and an optional on/off box) that shows its options when opened ----
 // Settings with several options sit in a group so the menu stays short. Ticking a group's box turns the feature on and opens it.
-enum{G_TIMER,G_CLOCK,G_STACK,G_MUSIC,G_TRACK,G_BOARDPOS,G_MTEXT,G_MLAYOUT,G_N};
+enum{G_TIMER,G_CLOCK,G_STACK,G_MUSIC,G_TRACK,G_BOARDPOS,G_MTEXT,G_MLAYOUT,G_PAUSE,G_N};
 static int grp_open[G_N];static int grp_y0[4],grp_dep=0;static unsigned grp_salt[4];
 static int ui_group(const char*lab,int*on,int g){
   int y=cy,h=U(30);cy+=U(36);
@@ -400,10 +400,15 @@ static void settings_panel(double now){
          if(mus_status[0])ui_keys(mus_status);
        }
        snprintf(b,sizeof b,"Music folder: %s",music_dir());ui_keys(b);
-       ui_keys("Put .mp3, .ogg, .wav or .flac files in that folder, then press Rescan. Files are only read on this computer, never copied or sent anywhere. Tracks up to 10 minutes are supported.");
+       ui_keys("Put .mp3, .ogg, .wav or .flac files in that folder, then press Rescan. Files are only read on this computer, never copied or sent anywhere. Any length works, even audiobooks many hours long: tracks play straight from the file.");
        if(ui_button("Rescan folder")){music_scan();ui_changed=1;}
        ui_group_end();
      }
+     if(musMode&&ui_group("Pause button",&npPause,G_PAUSE)){
+       static const char*PB[7]={"With the track name","Top left","Top center","Top right","Bottom left","Bottom center","Bottom right"};
+       ui_select("Position",&npPausePos,PB,7,127,0);
+       ui_keys("Click it during a game to stop and start your music. It takes the size and opacity of the track name.");
+       ui_group_end();}
      if(musMode&&ui_group("Show track on screen",&NP.on,G_TRACK)){
        ui_select("Position",&NP.pos,PLACE_NAMES,6,63,0);
        snprintf(b,sizeof b,"%d pt",NP.sz);ui_slider("Size",&NP.sz,10,48,b);

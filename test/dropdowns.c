@@ -3,7 +3,7 @@
 // choice the player clicks. (They used to hand the dropdown a value that no longer existed by the time it was written.)
 void plat_lock(void){} void plat_unlock(void){} void plat_fullscreen(int on){(void)on;} void plat_quit(void){}
 static int lastW=0,lastH=0;void plat_window_size(int w,int h){lastW=w;lastH=h;}
-int plat_thread(void(*fn)(void*),void*a){if(fn==sw_worker)return 0;fn(a);return 1;}   /* the Swirl worker never returns, so Swirl draws in-line here */ void plat_sleep(int ms){(void)ms;}
+int plat_thread(void(*fn)(void*),void*a){if(fn==sw_worker||fn==mus_stream_fn)return 0;fn(a);return 1;}   /* the Swirl worker never returns, so Swirl draws in-line here */ void plat_sleep(int ms){(void)ms;}
 const char* plat_pref_dir(void){return "/tmp/mt/";} const char* plat_home_dir(void){return "/tmp/mt/";}
 static u32*fb;static double t=1000;static int bad=0;
 #define CHK(c) do{if(!(c)){bad++;printf("FAIL line %d: %s\n",__LINE__,#c);}}while(0)

@@ -78,6 +78,7 @@ void app_key(int key,int down,int repeat){
   int a=key_action(key);if(a<0)return;
   if(down){if(!repeat)game_press(a);}else game_release(a);
 }
+static int pb_on=0;static double pb_x,pb_y,pb_s;   // the music pause button as last drawn (for the click test)
 static int to_x(int x){return winW>0?(int)((double)x*WW/winW):x;}
 static int to_y(int y){return winH>0?(int)((double)y*WH/winH):y;}
 void app_mouse_move(int x,int y){mx=to_x(x);my=to_y(y);}
@@ -86,6 +87,7 @@ void app_mouse_button(int x,int y,int down){
   if(down){
     if(pv_on){pv_stop();return;}
     mdown=1;mclicked=1;clx=x;cly=y;
+    if(!menu&&pb_on&&x>=pb_x&&x<pb_x+pb_s&&y>=pb_y&&y<pb_y+pb_s){musPaused=!musPaused;mclicked=0;return;}   /* the music pause button */
     if(!menu){int bx,by,bw,bh;strip_button_rect(&bx,&by,&bw,&bh);if(x>=bx&&x<bx+bw&&y>=by&&y<by+bh){menu=1;clearHeld();mclicked=0;}}
   }else{mdown=0;active_id=0;}
 }
@@ -130,8 +132,28 @@ static double np_fit(const char*s,double sz,double maxw,char*out,int n){   // sh
   int len=(int)strlen(out);while(len>1){len--;while(len>0&&((unsigned char)out[len]&0xC0)==0x80)len--;char t[260];memcpy(t,out,(size_t)len);t[len]=0;snprintf(out,n,"%s\xE2\x80\xA6",t);out[len+3]=0;if(text_w(0,sz,out)<=maxw){out[n-1]=0;return text_w(0,sz,out);}out[len]=0;}
   return text_w(0,sz,out);
 }
+// The pause button: two bars while music plays, a triangle while it is paused. Its rect is kept for the click test.
+static void pb_icon(double x,double y,double s,u32 c,double a){
+  if(!musPaused){double bw=s*.16,bh=s*.48,t=y+(s-bh)/2;fill_rect(x+s*.3,t,bw,bh,c,a);fill_rect(x+s*.7-bw,t,bw,bh,c,a);}
+  else{double h=s*.5,t=y+(s-h)/2,l=x+s*.36;int r,n=(int)(h+.5);for(r=0;r<n;r++){double f=(r+.5)/h,wd=(f<.5?f:1-f)*2*h*.86;fill_rect(l,t+r,wd,1,c,a);}}
+}
+static int np_light(double x0,double y0,double W_,double H_){   // is the screen under this box light? (picks dark or light ink)
+  int lum=0,cnt=0,gx,gy;for(gy=0;gy<3;gy++)for(gx=0;gx<5;gx++){int px=(int)(x0+W_*(gx+.5)/5),py=(int)(y0+H_*(gy+.5)/3);if(px>=0&&py>=0&&px<FW&&py<FH){u32 c=FB[(size_t)py*FW+px];lum+=(int)((((c>>16)&255)*54+((c>>8)&255)*183+(c&255)*19)>>8);cnt++;}}
+  return cnt&&lum/cnt>140;}
+static void pb_draw(double x,double y,double s,int light,double al){
+  u32 fg=light?HEX(0):HEX(0xffffff),sh=light?HEX(0xffffff):HEX(0);int hot=!menu&&mx>=x&&mx<x+s&&my>=y&&my<y+s;
+  fill_rect(x,y,s,s,sh,al*(hot?.45:.25));border_in((int)x,(int)y,(int)s,(int)s,1,fg,al*(hot?.8:.45));
+  pb_icon(x+UZ,y+UZ,s,sh,al*.5);pb_icon(x,y,s,fg,al);
+  pb_on=1;pb_x=x;pb_y=y;pb_s=s;}
 static void draw_nowplaying(void){
-  if(!NP.on||!musMode||!mus_buf)return;
+  pb_on=0;
+  int showPb=npPause&&musMode&&mus_have,withTrack=showPb&&npPausePos==0&&NP.on;
+  if(showPb&&!withTrack){   // on its own: at its chosen place, or where the track name would be when that is hidden
+    int stW=stripX();double m=12*UZ,s=fmax(NP.sz*1.4,18)*UZ;int pos=npPausePos?npPausePos-1:(NP.pos>5?5:NP.pos),col=pos%3;
+    double x=col==0?m:col==1?(stW-s)/2:stW-m-s,y=pos<3?m:WH-m-s;
+    if(NP.on&&npPausePos-1==(NP.pos>5?5:NP.pos)){withTrack=1;}   /* same place as the track name: sit beside it */
+    else pb_draw(x,y,s,np_light(x,y,s,s),NP.op/100.0);}
+  if(!NP.on||!musMode||!mus_have)return;
   int stW=stripX();double m=12*UZ,sz=NP.sz*UZ,maxw=stW*.45,gap=10*UZ;
   char l1[300],l2[300],det[300];const Meta*mt=&cur_meta;
   fctx_on=1;fctx_fam=NP.fam;fctx_bold=NP.bold;fctx_ital=0;
@@ -141,11 +163,11 @@ static void draw_nowplaying(void){
   double tw=w1>w2?w1:w2,tH=th+(det[0]?th2+3*UZ:0);
   int hasArt=npArt&&mt->art;double S=npArtSz*UZ,aw=0,ah=0;
   if(hasArt){double sc=S/(mt->aw>mt->ah?mt->aw:mt->ah);aw=mt->aw*sc;ah=mt->ah*sc;}
-  double W_=(hasArt?S+gap:0)+tw,H_=hasArt?(S>tH?S:tH):tH;
+  double pbS=withTrack?fmax(th*1.35,16*UZ):0;
+  double W_=(hasArt?S+gap:0)+tw+(withTrack?gap+pbS:0),H_=hasArt?(S>tH?S:tH):tH;if(pbS>H_)H_=pbS;
   int pos=NP.pos>5?5:NP.pos,col=pos%3;double x0=col==0?m:col==1?(stW-W_)/2:stW-m-W_,y0=pos<3?m:WH-m-H_;
   double tx=x0+(hasArt?S+gap:0),ty=y0+(H_-tH)/2;
-  int lum=0,cnt=0,gx,gy;for(gy=0;gy<3;gy++)for(gx=0;gx<5;gx++){int px=(int)(x0+W_*(gx+.5)/5),py=(int)(y0+H_*(gy+.5)/3);if(px>=0&&py>=0&&px<FW&&py<FH){u32 c=FB[(size_t)py*FW+px];lum+=(int)((((c>>16)&255)*54+((c>>8)&255)*183+(c&255)*19)>>8);cnt++;}}
-  int light=cnt&&lum/cnt>140;u32 fg=light?HEX(0):HEX(0xffffff),sh=light?HEX(0xffffff):HEX(0);double al=NP.op/100.0;
+  int light=np_light(x0,y0,W_,H_);u32 fg=light?HEX(0):HEX(0xffffff),sh=light?HEX(0xffffff):HEX(0);double al=NP.op/100.0;
   if(hasArt){   // the picture, centered in its square, scaled with nearest-neighbour sampling
     int ix=(int)(x0+(S-aw)/2),iy=(int)(y0+(H_-ah)/2),iw=(int)aw,ih=(int)ah,x,y,a255=(int)(al*255+.5);
     for(y=0;y<ih;y++)for(x=0;x<iw;x++){int sx=x*mt->aw/iw,sy=y*mt->ah/ih;putpx(ix+x,iy+y,mt->art[sy*mt->aw+sx],a255);}
@@ -154,6 +176,7 @@ static void draw_nowplaying(void){
   {int pass;for(pass=0;pass<2;pass++){double o=pass==0?UZ:0;u32 c=pass==0?sh:fg;double a=pass==0?al*.5:al;
     text_at(0,sz,tx+o,ty+asc+o,c,a,l1);if(det[0])text_at(0,sz2,tx+o,ty+th+3*UZ+asc2+o,c,a*.85,l2);}}
   fctx_on=0;
+  if(withTrack)pb_draw(tx+tw+gap,y0+(H_-pbS)/2,pbS,light,al);
 }
 static void draw_clocks(void){
   ClkBox b[2];int i,pos,stW=stripX();double m=12*UZ,gap_v=4*UZ,gap_h=16*UZ;

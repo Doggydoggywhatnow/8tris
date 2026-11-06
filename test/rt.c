@@ -1,5 +1,5 @@
 #include "../src/8tris.c"
-void plat_lock(void){} void plat_unlock(void){} void plat_fullscreen(int on){(void)on;} void plat_quit(void){} void plat_window_size(int w,int h){(void)w;(void)h;} int plat_thread(void(*fn)(void*),void*a){if(fn==sw_worker)return 0;fn(a);return 1;} void plat_sleep(int ms){(void)ms;}
+void plat_lock(void){} void plat_unlock(void){} void plat_fullscreen(int on){(void)on;} void plat_quit(void){} void plat_window_size(int w,int h){(void)w;(void)h;} int plat_thread(void(*fn)(void*),void*a){if(fn==sw_worker||fn==mus_stream_fn)return 0;fn(a);return 1;} void plat_sleep(int ms){(void)ms;}
 const char* plat_pref_dir(void){return "/tmp/8tris-rt/";} const char* plat_home_dir(void){return "/tmp/8tris-rt/";}
 #define EQ(a) do{if((a)!=(b_##a)){printf("MISMATCH %s: %g vs %g\n",#a,(double)(a),(double)(b_##a));bad++;}}while(0)
 int main(void){int bad=0,i;system("rm -rf /tmp/8tris-rt;mkdir -p /tmp/8tris-rt");u32*fb=calloc(1000*720,4);app_init();app_resize(1000,720);
