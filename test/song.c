@@ -26,4 +26,8 @@ int main(int argc,char**argv){
   combo=0;song_tick(1);combo=5;song_tick(1);if(!song_playing)bad=1;song_tick(0);if(song_playing)bad=1;song_tick(1);if(!song_playing)bad=1;
   combo=0;song_tick(1);if(song_playing)bad=1;combo=3;song_tick(1);if(!song_playing)bad=1;comboSong=0;song_tick(1);if(song_playing)bad=1;
   // with the combo song on, the usual combo sound is skipped (a fresh voice pool stays empty after a scored combo)
+  // the per-combo melody: never the same note twice in a row, stays within range, and lands on a chord tone on strong beats
+  {int k,last=-99,badm=0,lo=99,hi=-99;unsigned r=12345;for(k=2;k<=5000;k++){r=r*1664525u+1013904223u;int root=(int)(r>>24)%7,st=(int)(r>>20)&1;int d=song_tick_deg(k,root,st,last);
+     if(d==last)badm++;if(d<lo)lo=d;if(d>hi)hi=d;if(st){int q=((d-root)%7+7)%7;if(q!=0&&q!=2&&q!=4)badm++;}last=d;}
+   printf("combo melody: degrees %d..%d, problems %d\n",lo,hi,badm);if(badm||lo<-10||hi>9)bad=1;}
   printf("song test %s\n",bad?"FAILED":"ok");return bad;}

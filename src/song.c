@@ -5,7 +5,7 @@
 //  15 pads                      20 lead melody    30 counter-melody, octave bass, 16th hats
 //  40 sparkles                  50 key change     60 choir           70-79 "lucky sevens": the song turns major
 //  80 double-time drums         100 final form: key change, lead doubled an octave up, crashes all over
-// Every combo also rings a note that climbs the scale, plus the same short two-note blip each time the combo goes up. Every 10th combo hits a crash and a chord stab, numbers like 11, 22 and
+// Every combo also adds one note of a melody that fits the song (a marimba-style pluck on the current chord and key). Every 10th combo hits a crash and a chord stab, numbers like 11, 22 and
 // 77 play a fanfare (77 and 777 hit a jackpot of bells), and every 100th gets a drum roll. When the chain breaks the song ends
 // on a final chord. Notes are scheduled a fraction of a second ahead on a 16th-note grid, straight onto the audio clock.
 // The song plays at every Effects level and replaces combo sounds only; everything else still sounds as usual.
@@ -17,6 +17,7 @@ static const int PROG[4][4]={{0,5,2,6},{0,6,5,6},{5,6,0,0},{0,3,5,4}},PROG_MAJ[4
 static const unsigned RHY[6]={0x8888u,0xAAAAu,0xA8AAu,0x8A8Au,0xAA88u,0xB6B6u};
 
 // song_resume: the song was stopped by a pause or the menu while the chain was still alive
+static int song_lastd=-99;   // the last melody note played (so a note is never repeated)
 static int song_playing=0,song_seen=0,song_resume=0;static i64 song_next=0;static long song_step=0;static double song_len=0;
 typedef struct{int major,key;const int*sc;}SongMode;
 
@@ -81,13 +82,21 @@ static void song_step_play(long step,i64 at,int c){
     }
   }
 }
+// The scale degree (relative to the key, 0 = tonic) of the note combo k adds. A smooth, always-changing contour that wanders about two
+// octaves around the tonic, so successive notes are close together and form a tune. On strong beats it lands on a tone of the current
+// chord (root, third or fifth, 'root' being the chord's scale degree). The same chain always plays the same tune.
+static int song_contour(int k){return(int)floor(4.0*sin(k*.37)+2.5*sin(k*.91+1.0)-1.0+.5);}
+static int song_tick_deg(int k,int root,int strong,int last){   // 'last' is the note just played: a note is never repeated
+  int d=song_contour(k);
+  if(d==last)d+=(k%2)?1:-1;
+  if(strong){int e,best=d,bd=99;for(e=d-3;e<=d+3;e++){int r=((e-root)%7+7)%7;if((r==0||r==2||r==4)&&e!=last&&abs(e-d)<bd){bd=abs(e-d);best=e;}}d=best;}
+  return d;}
 // The extra flourishes for reaching combo k, played from time 'at'.
 static void song_milestone(int k,i64 at){
   SongMode m=song_mode(k);long bar=song_step/16;int root=song_chord(k,bar),i;double L=song_len;
-  // every combo: a bell that climbs the scale (wrapping every three octaves)
-  {int d=(k-2)%21;song_pan=(k%2?.3:-.3);sn(at,song_f(&m,root+d,3),.35,W_SINE,.09,.35,0,0,1,0);sn(at,song_f(&m,root+d,4),.2,W_TRI,.03,.35,0,0,1,0);}
-  // and the same short two-note blip every time the combo goes up (tonic, then the fifth), so each step is easy to hear
-  {song_pan=0;sn(at,song_f(&m,0,3),.11,W_PULSE25,.11,.15,0,0,1,0);sn(at+(i64)(.065*SR),song_f(&m,4,3),.16,W_PULSE25,.11,.2,0,0,1,0);}
+  // every combo adds one note of a melody that fits the song: a marimba-style pluck in the current key and chord
+  {int strong=(song_step%4)==0,d=song_tick_deg(k,root,strong,song_lastd);song_lastd=d;double f=song_f(&m,d,3);song_pan=(k%2?.25:-.25);
+   sn(at,f,.3,W_TRI,.16,.3,0,0,1,0);sn(at,f*2,.15,W_SINE,.07,.3,0,0,1,0);sn(at,f*.5,.18,W_SINE,.07,.1,0,0,1,0);}
   if(k%10==0){s_crash(at,1);s_kick(at,1.2);
     for(i=0;i<3;i++)if((song_pan=(i-1)*.5),1)sn(at,song_f(&m,root+2*i,2),.6,W_SAW,.07,.4,0,1,2,12);
     sn(at,110*pow(2,m.key/12.0),1.1,W_SINE,.5,0,32,0,1,0);}                     // sub drop
@@ -113,7 +122,7 @@ static void song_tick(int active){
   i64 now=audio_clock(),ahead=(i64)(.12*SR);
   if(song_playing&&(c<2||!active)){song_end(song_next>now?song_next:now,c<2&&active);song_resume=c>=2&&!active;song_seen=c;return;}
   if(c<2)song_resume=0;
-  if(!song_playing){if(c>=2&&active&&(c>song_seen||song_resume)){song_resume=0;song_playing=1;song_step=0;song_len=song_step_len(c);song_next=now+(i64)(.03*SR);}else{song_seen=c;return;}}
+  if(!song_playing){if(c>=2&&active&&(c>song_seen||song_resume)){song_resume=0;song_playing=1;song_lastd=-99;song_step=0;song_len=song_step_len(c);song_next=now+(i64)(.03*SR);}else{song_seen=c;return;}}
   if(song_next<now)song_next=now+(i64)(.01*SR);   // fell behind (a long frame): pick up from here rather than rush
   if(c>song_seen){   // new combos: their flourishes land on the next 16th
     i64 at=song_next,step=(i64)(song_len*SR);while(at-step>=now+(i64)(.02*SR))at-=step;

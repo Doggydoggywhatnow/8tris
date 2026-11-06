@@ -2,6 +2,10 @@
 
 Versions are `major.minor.patch`. Until about ten changes have built up, new features are shipped as patch releases, so a patch number here can include features. This file is the real record of what changed.
 
+## 0.7.11
+- Combo song: every combo increase now adds its own note of a melody that fits the song, a marimba-style pluck in the current key and chord. The notes wander smoothly, never repeat twice in a row, and land on chord tones on strong beats. This replaces the earlier two-note blip and the climbing bell.
+- New check in `test/song.c` for that melody.
+
 ## 0.7.10
 - The game timer has a new **Show milliseconds** tickbox (Theming, with the timer's other options). It shows time as 1:23.456, and it is saved with your preferences.
 
