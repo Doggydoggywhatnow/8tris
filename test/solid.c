@@ -32,7 +32,7 @@ int main(void){int bad=0;fb=calloc(w*h,4);system("mkdir -p /tmp/8tris-test-pref"
  click(500,250);CHECK(solidP!=HEX(0xff00cc));printf("after pad click %06x\n",solidP&0xFFFFFF);
  {u32 before=solidP;click(520,338);CHECK(solidP!=before);printf("after hue click %06x\n",solidP&0xFFFFFF);}
  {int rx=594;click(rx,385);printf("after red click %06x pk_open=%d\n",solidP&0xFFFFFF,pk_open);CHECK((solidP>>16&255)>=250);}
- click(354,636);CHECK(solidP!=pk_orig||1);click(482,636);   // revert (after done closed? just ensure no crash)
+ click(354,636);CHECK(pk_open==0);   // Done closes the picker
  pk_open=1;pk_t=&solidP;pk_orig=solidP;run(2);click(400,250);{u32 a=solidP;click(482,636);CHECK(solidP==pk_orig);(void)a;}
  app_key(K_ESC,1,0);CHECK(pk_open==0&&menu==1);
  solidP=HEX(0x123456);solidG=HEX(0xabcdef);solidSep=1;save_settings();solidP=0;solidG=0;solidSep=0;load_settings();

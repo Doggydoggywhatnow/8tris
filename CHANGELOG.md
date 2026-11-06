@@ -2,6 +2,12 @@
 
 Versions are `major.minor.patch`. Until about ten changes have built up, new features are shipped as patch releases, so a patch number here can include features. This file is the real record of what changed.
 
+## 0.7.13
+- **Simpler preferences.** Settings that come with several options now sit in collapsible groups, closed until you open them: Game timer, Real-time clock, Stacking, Music, Show track on screen, Board position, Menu text and Menu layout. A group's box turns the feature on or off; ticking it also opens the group. Options inside a group use short names (Position, Size, Opacity, Font, Bold).
+- **One button style everywhere.** Every button now has the same height and padding, is as wide as its label, and sits on its own line at the left. Buttons that open a popup end in "...". The buttons that used to sit in the right-hand column (Reset to 10 x 20, Smaller and Larger, the key bindings Reset) moved onto their own lines; the key bindings one is now "Reset key bindings", under the list. Popup footers (Done, Revert, Close, Reset all to equal) and the Apply and restart and Resume buttons follow the same rule.
+- Shorter labels where the old ones had to shrink to fit: Screen brightness, Landing outline, Date offset (hours), Daylight saving (the help text says it adds one hour), Artist and album, Album art.
+- Tests: the dropdown and color-picker tests follow the new layout; test thread stubs no longer hang when a click lands on the Swirl theme.
+
 ## 0.7.12
 - Combo song: the crash cymbal is softer and less harsh (darker, quieter and shorter), and it plays less often: the repeating crashes come half as often, and the every-10th-combo crash now lands on every 20th. The kick and chord stabs on every 10th are unchanged.
 

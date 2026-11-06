@@ -2,7 +2,7 @@
 // Combo song: plays a long chain offline (no window), checks the mix stays clean, and can write it to a WAV file to listen to.
 //   ./song [out.wav] [last combo] [seconds per combo]
 void plat_lock(void){} void plat_unlock(void){} void plat_fullscreen(int on){(void)on;} void plat_quit(void){} void plat_window_size(int w,int h){(void)w;(void)h;}
-int plat_thread(void(*fn)(void*),void*a){fn(a);return 1;} void plat_sleep(int ms){(void)ms;}
+int plat_thread(void(*fn)(void*),void*a){if(fn==sw_worker)return 0;fn(a);return 1;} void plat_sleep(int ms){(void)ms;}
 const char* plat_pref_dir(void){return "/tmp/8tris-song/";} const char* plat_home_dir(void){return "/tmp/8tris-song/";}
 static void w32(FILE*f,unsigned v){fwrite(&v,4,1,f);}static void w16(FILE*f,unsigned v){fputc(v&255,f);fputc(v>>8,f);}
 int main(int argc,char**argv){

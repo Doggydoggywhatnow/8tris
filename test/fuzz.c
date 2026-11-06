@@ -1,5 +1,5 @@
 #include "../src/8tris.c"
-void plat_lock(void){} void plat_unlock(void){} void plat_fullscreen(int on){(void)on;} void plat_quit(void){} void plat_window_size(int w,int h){(void)w;(void)h;} int plat_thread(void(*fn)(void*),void*a){fn(a);return 1;} void plat_sleep(int ms){(void)ms;}
+void plat_lock(void){} void plat_unlock(void){} void plat_fullscreen(int on){(void)on;} void plat_quit(void){} void plat_window_size(int w,int h){(void)w;(void)h;} int plat_thread(void(*fn)(void*),void*a){if(fn==sw_worker)return 0;fn(a);return 1;} void plat_sleep(int ms){(void)ms;}
 const char* plat_pref_dir(void){return "/tmp/8tris-fz/";} const char* plat_home_dir(void){return "/tmp/8tris-fz/";}
 static u32*fb;static double t=1000;
 static unsigned long long rs=88172645463325252ULL;static unsigned frnd(void){rs^=rs<<13;rs^=rs>>7;rs^=rs<<17;return (unsigned)(rs>>11);}

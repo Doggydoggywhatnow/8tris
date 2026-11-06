@@ -28,7 +28,8 @@ static int vis(int y,int h){return y+h>PVY&&y<PVY+PVH;}
 static int uhit(int x,int y,int w,int h){return mclicked&&clx>=x&&clx<x+w&&cly>=y&&cly<y+h&&cly>=PVY&&cly<PVY+PVH;}
 static int sel_open=0;
 static int uhov(int x,int y,int w,int h){return !sel_open&&mx>=x&&mx<x+w&&my>=y&&my<y+h&&my>=PVY&&my<PVY+PVH;}
-static unsigned hid(const char*s,int k){unsigned h=2166136261u;while(*s)h=(h^(unsigned char)*s++)*16777619u;return h^((unsigned)k*40503u);}
+static unsigned hid_salt=0;   // set inside a collapsible group, so the same short label ("Size") in two groups is two controls
+static unsigned hid(const char*s,int k){unsigned h=2166136261u^(hid_salt*2654435761u);while(*s)h=(h^(unsigned char)*s++)*16777619u;return h^((unsigned)k*40503u);}
 
 // ---- text ----
 static void label(int y,const char*s){double sz=U(14),mw=PW-CWd()-U(8);while(sz>8&&text_w(0,sz,s)>mw)sz--;text_mid(0,sz,PX,y,U(30),P.fg,1,s);}
@@ -68,6 +69,35 @@ static int btn_at(int x,int y,int w,const char*lab){
   text_center(0,sz,x+w/2.0,y+(h-0)/2.0+sz*.36-sz*.0,hot?P.bg:P.fg,1,lab);
   return uhit(x,y,w,h);
 }
+// One button shape everywhere: the same height and padding, as wide as its label needs. Buttons that open a popup end in "...".
+static int btn_w(const char*lab){return imin(PW,imax(U(80),(int)text_w(0,U(14),lab)+U(32)));}
+// A row of buttons on its own line, left-aligned, wrapping onto more lines if they do not fit. Returns the one clicked, or -1.
+static int ui_buttons(int n,const char*const*labs){
+  int i,x=PX,hit=-1;cy+=U(2);
+  for(i=0;i<n;i++){int w=btn_w(labs[i]);if(x>PX&&x+w>PX+PW){x=PX;cy+=U(38);}if(vis(cy,U(30))&&btn_at(x,cy,w,labs[i]))hit=i;x+=w+U(8);}
+  cy+=U(42);return hit;}
+static int ui_button(const char*lab){return ui_buttons(1,&lab)==0;}
+// The same buttons in a dialog's fixed footer, placed left to right from *x.
+static int foot_btn(int*x,int y,const char*lab){int w=btn_w(lab),r=btn_at(*x,y,w,lab);*x+=w+U(8);return r;}
+
+// ---- collapsible groups: a row with an arrow (and an optional on/off box) that shows its options when opened ----
+// Settings with several options sit in a group so the menu stays short. Ticking a group's box turns the feature on and opens it.
+enum{G_TIMER,G_CLOCK,G_STACK,G_MUSIC,G_TRACK,G_BOARDPOS,G_MTEXT,G_MLAYOUT,G_N};
+static int grp_open[G_N];static int grp_y0[4],grp_dep=0;static unsigned grp_salt[4];
+static int ui_group(const char*lab,int*on,int g){
+  int y=cy,h=U(30);cy+=U(36);
+  if(vis(y,h)){
+    if(uhov(PX,y,PW,h))fill_rect(PX,y,PW,h,P.fg,.07);
+    text_mid(0,U(12),PX+U(4),y,h,P.fg,.8,grp_open[g]?"\xE2\x96\xBE":"\xE2\x96\xB8");
+    double sz=U(14);while(sz>8&&text_w(0,sz,lab)>PW-U(64))sz--;text_mid(0,sz,PX+U(22),y,h,P.fg,1,lab);
+    if(on){int bx=PX+PW-U(18),by=y+U(6);box(bx,by,U(18),U(18),0);if(*on)fill_rect(bx+U(4),by+U(4),U(10),U(10),P.fg,1);
+      if(uhit(bx-U(10),y,U(28),h)){*on=!*on;ui_changed=1;if(*on)grp_open[g]=1;}
+      else if(uhit(PX,y,PW-U(28),h))grp_open[g]=!grp_open[g];}
+    else if(uhit(PX,y,PW,h))grp_open[g]=!grp_open[g];
+  }
+  if(!grp_open[g]||(on&&!*on)||grp_dep>=4)return 0;
+  grp_salt[grp_dep]=hid_salt;grp_y0[grp_dep++]=cy;hid_salt=(unsigned)g+1;PX+=U(18);PW-=U(18);return 1;}
+static void ui_group_end(void){PX-=U(18);PW+=U(18);int y0=grp_y0[--grp_dep];hid_salt=grp_salt[grp_dep];if(cy-y0>U(8))fill_rect(PX+U(8),y0,1,cy-y0-U(8),P.sep,1);cy+=U(4);}
 static int ui_check(const char*lab,int*v){
   int y=cy;cy+=U(36);if(!vis(y,U(30)))return 0;
   label(y,lab);int bx=PX+PW-U(18),by=y+U(6);box(bx,by,U(18),U(18),0);if(*v)fill_rect(bx+U(4),by+U(4),U(10),U(10),P.fg,1);
@@ -264,7 +294,8 @@ static void settings_panel(double now){
   // ---- Game ----
   if(ui_head("Game",&sec_open[0],now)){
     ui_num("Width",&pW,4,500);ui_num("Height",&pH,4,500);
-    {int y=cy;cy+=U(36);if(vis(y,U(30))){label(y,"Standard size");if(btn_at(PX+PW-CWd(),y,CWd(),"Reset to 10 \xC3\x97 20")){pW=10;pH=20;focus_commit();ui_changed=1;}}}ui_num("Hold slots",&pSlots,1,10);
+    if(ui_button("Reset to 10 \xC3\x97 20")){pW=10;pH=20;focus_commit();ui_changed=1;}
+    ui_num("Hold slots",&pSlots,1,10);
     ui_fall();
     {int sdv=sdRate;ui_num("Soft drop (rows/s)",&sdRate,1,500);(void)sdv;}
     if(ui_check("Level system",&lvlSys)){if(pieces>0&&!over)runDirty=1;level=curLevel();}
@@ -281,8 +312,7 @@ static void settings_panel(double now){
     int colw=PW/3;
     for(i=0;i<11;i++){int on=pWeights[i+1]>0,x=PX+(i%3)*colw,y=cy+(i/3)*U(28);if(check_at(x,y,colw,SETNAME[i],&on))pWeights[i+1]=on?(pWeights[i+1]>0?pWeights[i+1]:1):0;}
     cy+=4*U(28)+U(4);
-    if(btn_at(PX,cy,U(150),"Set frequencies")){freq_open=1;}
-    cy+=U(40);
+    if(ui_button("Set frequencies\xE2\x80\xA6"))freq_open=1;
   }
   // ---- Theming ----
   if(ui_head("Theming",&sec_open[2],now)){
@@ -291,50 +321,47 @@ static void settings_panel(double now){
     if(!themeOn)ui_keys("Off by default: you get the standard 8tris look. Turn it on to choose a theme for each part of the game separately.");
     else{
       ui_sub("Presets (set every part at once)");
-      {int x=PX,k;for(k=0;k<N_THEMES;k++){int t=THEME_ORDER[k],w=(int)text_w(0,U(14),THEME_NAME[t])+U(20);
-        if(x>PX&&x+w>PX+PW){x=PX;cy+=U(36);}
-        if(btn_at(x,cy,w,THEME_NAME[t])){int c;for(c=0;c<N_COMPS;c++)if((AVAIL[c]>>t)&1)TC[c]=t;ui_changed=1;}x+=w+U(6);}cy+=U(40);}
+      {const char*nm[N_THEMES];int k;for(k=0;k<N_THEMES;k++)nm[k]=THEME_NAME[THEME_ORDER[k]];
+       k=ui_buttons(N_THEMES,nm);if(k>=0){int t=THEME_ORDER[k],c;for(c=0;c<N_COMPS;c++)if((AVAIL[c]>>t)&1)TC[c]=t;ui_changed=1;}}
       ui_keys("Or give each part its own theme: the page, side panel, menu, board frame, board, grid, pieces, landing outline, effect colors and sound voice.");
-      if(btn_at(PX,cy,U(200),"Theme each part\xE2\x80\xA6"))partsp_open=1;cy+=U(40);
+      if(ui_button("Theme each part\xE2\x80\xA6"))partsp_open=1;
       if(TC[C_PIECES]==TH_SOLID||TC[C_GHOST]==TH_SOLID){
         ui_sub("Solid Color");
         if(!solidSep){ui_color("Color",&solidP,"Pieces and landing outline",1);
           ui_keys("Used for Pieces and Landing outline wherever they are set to Solid Color. Type a hex code like #3d9bff, or click the swatch for a full color picker. Advanced effect options lets each have its own color.");}
         else{ui_keys("Pieces and Landing outline use separate colors, set in Advanced effect options below.");
-          if(btn_at(PX,cy,U(190),"Advanced effect options\xE2\x80\xA6"))advp_open=1;cy+=U(40);}
+          if(ui_button("Advanced effect options\xE2\x80\xA6"))advp_open=1;}
       }
     }
     ui_sub("Filters");
     ui_keys(flt_active()?"Filters are on. They change the whole game picture on top of whichever themes are chosen.":"Brightness, contrast, saturation, hue, color split, tint, opacity and invert, over any theme. All off right now.");
-    if(btn_at(PX,cy,U(150),"Filters\xE2\x80\xA6"))fltp_open=1;cy+=U(40);
+    if(ui_button("Filters\xE2\x80\xA6"))fltp_open=1;
     {
      
-     static const char*MN[4]={"00","15","30","45"};static const char*NM[2]={"Timer","Clock"};
-     static char L[2][6][40];int i;
+     static const char*MN[4]={"00","15","30","45"};int i;
+     ui_sub("Timer and clock");
      for(i=0;i<2;i++){
-       ui_sub(i?"Real-time clock":"Game timer");
-       snprintf(L[i][0],40,"Show %s",i?"clock":"timer");ui_check(L[i][0],&CLK[i].on);
-       if(i==1&&CLK[1].on){
+       if(!ui_group(i?"Real-time clock":"Game timer",&CLK[i].on,i?G_CLOCK:G_TIMER))continue;
+       if(i==1){
          ui_num("UTC offset, hours",&clkTzH,-12,14);
          static int mi=0,miv=0;if(mi!=miv)clkTzM=iclamp(mi,0,3)*15;mi=miv=clkTzM/15;ui_select("UTC offset, minutes",&mi,MN,4,15,0);   /* static: the dropdown writes here after this function returns */
-         ui_check("Daylight saving (+1 hour)",&clkDst);ui_check("24-hour clock",&clk24);ui_check("Show seconds",&clkSecs);
-         ui_keys("Type your own offset from UTC, for example -5 for New York in winter, or 5 and 30 for India. 8tris never looks up your timezone or location: it only reads the device's clock and adds the offset you enter.");
+         ui_check("Daylight saving",&clkDst);ui_check("24-hour clock",&clk24);ui_check("Show seconds",&clkSecs);
+         ui_keys("Type your own offset from UTC, for example -5 for New York in winter, or 5 and 30 for India. Daylight saving adds one hour. 8tris never looks up your timezone or location: it only reads the device's clock and adds the offset you enter.");
        }
-       if(CLK[i].on){
-         snprintf(L[i][1],40,"%s position",NM[i]);ui_select(L[i][1],&CLK[i].pos,PLACE_NAMES,7,127,0);
-         snprintf(L[i][2],40,"%s size",NM[i]);snprintf(b,sizeof b,"%d pt",CLK[i].sz);ui_slider(L[i][2],&CLK[i].sz,12,120,b);
-         snprintf(L[i][3],40,"%s opacity",NM[i]);snprintf(b,sizeof b,"%d%%",CLK[i].op);ui_slider(L[i][3],&CLK[i].op,10,100,b);
-         snprintf(L[i][4],40,"%s font",NM[i]);ui_select(L[i][4],&CLK[i].fam,FONT_NAMES,7,127,0);
-         snprintf(L[i][5],40,"%s bold",NM[i]);ui_check(L[i][5],&CLK[i].bold);
-         if(i==0)ui_check("Show milliseconds",&timerMs);
-         if(i==0)ui_keys("Counts play time only: it stops while paused or in this menu, and starts over with each game. In the side panel the size shrinks to fit.");
-       }
+       ui_select("Position",&CLK[i].pos,PLACE_NAMES,7,127,0);
+       snprintf(b,sizeof b,"%d pt",CLK[i].sz);ui_slider("Size",&CLK[i].sz,12,120,b);
+       snprintf(b,sizeof b,"%d%%",CLK[i].op);ui_slider("Opacity",&CLK[i].op,10,100,b);
+       ui_select("Font",&CLK[i].fam,FONT_NAMES,7,127,0);
+       ui_check("Bold",&CLK[i].bold);
+       if(i==0){ui_check("Show milliseconds",&timerMs);
+         ui_keys("Counts play time only: it stops while paused or in this menu, and starts over with each game. In the side panel the size shrinks to fit.");}
+       ui_group_end();
      }
-     if(CLK[0].on&&CLK[1].on){
+     if(CLK[0].on&&CLK[1].on&&ui_group("Stacking",NULL,G_STACK)){
        static const char*SV[2]={"Side by side","One above the other"},*SF[2]={"Game timer first","Clock first"};
-       ui_sub("Stacking");
        ui_select("Stack direction",&stackV,SV,2,3,0);ui_select("Stack order",&stackFirst,SF,2,3,0);
        ui_keys("These apply when the timer and the clock are set to the same position. The side panel always stacks one above the other.");
+       ui_group_end();
      }}
     ui_sub("Effects");
     ui_select("Effects",&fxMaster,LVN,5,31,0);
@@ -342,11 +369,9 @@ static void settings_panel(double now){
     if(fxMaster>=3||ADV[0]>=3||ADV[1]>=3||ADV[2]>=3||ADV[3]>=3)ui_warn("High and Intense add bright flashes, screen shake and loud sounds. No guarantee is made that they are safe for people who are sensitive to flashing light. Try Preview first, and turn this down if anything is uncomfortable.");
     ui_check("Reduce motion",&calm);
     if(calm)ui_keys("Reduce motion is on, so effects stop at Moderate, with softer flashes, no screen shake and no animated backgrounds.");
-    if(btn_at(PX,cy,U(120),"Preview")){focus_commit();resolve_fx();pv_start();}
-    cy+=U(40);
+    if(ui_button("Preview")){focus_commit();resolve_fx();pv_start();}
     ui_keys("Preview hides this panel and plays a sample combo and perfect clear, with sound. Press any key or click to stop it.");
-    if(btn_at(PX,cy,U(190),"Advanced effect options\xE2\x80\xA6"))advp_open=1;
-    cy+=U(40);
+    if(ui_button("Advanced effect options\xE2\x80\xA6"))advp_open=1;
   }
   // ---- Sound ----
   if(ui_head("Sound",&sec_open[3],now)){
@@ -357,31 +382,30 @@ static void settings_panel(double now){
     ui_keys("The sound voice and which sounds play with effects are set in Theming.");
     ui_check("Combo song",&comboSong);
     ui_keys("Replaces the combo sounds with a song that builds for as long as your combo chain lasts. Keep the chain going and see where it goes.");
-    ui_sub("Music");
     {static const char*MM[4]={"Off","Repeat one track","Play all in order","Play all shuffled"};static int was=0;
      if(!was){music_scan();}was=1;
-     ui_select("Music",&musMode,MM,4,15,0);
-     if(musMode){
-       if(musMode==1&&nmfiles){static const char*nm[MUS_MAXFILES];int k;for(k=0;k<nmfiles;k++)nm[k]=mfiles[k];static int tsel=0,tselv=0;if(tsel!=tselv&&tsel>=0&&tsel<nmfiles){musSel=tsel;snprintf(musFile,sizeof musFile,"%s",mfiles[tsel]);}tsel=tselv=musSel;ui_select("Track",&tsel,nm,nmfiles,-1,0);}   /* static: the dropdown writes here after this function returns */
-       snprintf(b,sizeof b,musVol?"%d%%":"Off",musVol);ui_slider("Music volume",&musVol,0,100,b);
-       if(mus_status[0])ui_keys(mus_status);
-       {
-        
-        ui_check("Show track on screen",&NP.on);
-        if(NP.on){
-          ui_select("Track display position",&NP.pos,PLACE_NAMES,6,63,0);
-          snprintf(b,sizeof b,"%d pt",NP.sz);ui_slider("Track display size",&NP.sz,10,48,b);
-          snprintf(b,sizeof b,"%d%%",NP.op);ui_slider("Track display opacity",&NP.op,10,100,b);
-          ui_select("Track display font",&NP.fam,FONT_NAMES,7,127,0);ui_check("Track display bold",&NP.bold);
-          ui_check("Show artist and album",&npArtist);ui_check("Show album art",&npArt);
-          if(npArt){snprintf(b,sizeof b,"%d px",npArtSz);ui_slider("Album art size",&npArtSz,32,256,b);}
-          ui_keys("The title, artist, album and cover picture are read from the music file's own tags. If a file has no title tag, its file name is shown.");
-        }}
+     if(ui_group("Music",NULL,G_MUSIC)){
+       ui_select("Music",&musMode,MM,4,15,0);
+       if(musMode){
+         if(musMode==1&&nmfiles){static const char*nm[MUS_MAXFILES];int k;for(k=0;k<nmfiles;k++)nm[k]=mfiles[k];static int tsel=0,tselv=0;if(tsel!=tselv&&tsel>=0&&tsel<nmfiles){musSel=tsel;snprintf(musFile,sizeof musFile,"%s",mfiles[tsel]);}tsel=tselv=musSel;ui_select("Track",&tsel,nm,nmfiles,-1,0);}   /* static: the dropdown writes here after this function returns */
+         snprintf(b,sizeof b,musVol?"%d%%":"Off",musVol);ui_slider("Volume",&musVol,0,100,b);
+         if(mus_status[0])ui_keys(mus_status);
+       }
+       snprintf(b,sizeof b,"Music folder: %s",music_dir());ui_keys(b);
+       ui_keys("Put .mp3, .ogg, .wav or .flac files in that folder, then press Rescan. Files are only read on this computer, never copied or sent anywhere. Tracks up to 10 minutes are supported.");
+       if(ui_button("Rescan folder")){music_scan();ui_changed=1;}
+       ui_group_end();
      }
-     snprintf(b,sizeof b,"Music folder: %s",music_dir());ui_keys(b);
-     ui_keys("Put .mp3, .ogg, .wav or .flac files in that folder, then press Rescan. Files are only read on this computer, never copied or sent anywhere. Tracks up to 10 minutes are supported.");
-     if(btn_at(PX,cy,U(150),"Rescan folder")){music_scan();ui_changed=1;}
-     cy+=U(40);}
+     if(musMode&&ui_group("Show track on screen",&NP.on,G_TRACK)){
+       ui_select("Position",&NP.pos,PLACE_NAMES,6,63,0);
+       snprintf(b,sizeof b,"%d pt",NP.sz);ui_slider("Size",&NP.sz,10,48,b);
+       snprintf(b,sizeof b,"%d%%",NP.op);ui_slider("Opacity",&NP.op,10,100,b);
+       ui_select("Font",&NP.fam,FONT_NAMES,7,127,0);ui_check("Bold",&NP.bold);
+       ui_check("Artist and album",&npArtist);ui_check("Album art",&npArt);
+       if(npArt){snprintf(b,sizeof b,"%d px",npArtSz);ui_slider("Album art size",&npArtSz,32,256,b);}
+       ui_keys("The title, artist, album and cover picture are read from the music file's own tags. If a file has no title tag, its file name is shown.");
+       ui_group_end();
+     }}
   }
   // ---- Display ----
   if(ui_head("Display",&sec_open[4],now)){
@@ -394,40 +418,44 @@ static void settings_panel(double now){
     ui_check("Show frame rate",&showFps);
     {static const char*BP[7]={"Top left","Top center","Top right","Bottom left","Bottom center","Bottom right","Side panel (default)"};ui_select("Preferences button",&prefBtn,BP,7,127,0);}
     ui_keys("Where the Preferences button sits. Esc always opens preferences too, wherever the button is.");
-    snprintf(b,sizeof b,boardPX==0?"Left":boardPX==100?"Right":boardPX==50?"Center":"%d%%",boardPX);ui_slider("Board, left to right",&boardPX,0,100,b);
-    snprintf(b,sizeof b,boardPY==0?"Top":boardPY==100?"Bottom":boardPY==50?"Center":"%d%%",boardPY);ui_slider("Board, top to bottom",&boardPY,0,100,b);
-    if(boardPX!=50||boardPY!=50){if(btn_at(PX,cy,U(150),"Center the board")){boardPX=50;boardPY=50;ui_changed=1;}cy+=U(40);}
+    if(ui_group("Board position",NULL,G_BOARDPOS)){
+      snprintf(b,sizeof b,boardPX==0?"Left":boardPX==100?"Right":boardPX==50?"Center":"%d%%",boardPX);ui_slider("Left to right",&boardPX,0,100,b);
+      snprintf(b,sizeof b,boardPY==0?"Top":boardPY==100?"Bottom":boardPY==50?"Center":"%d%%",boardPY);ui_slider("Top to bottom",&boardPY,0,100,b);
+      if(boardPX!=50||boardPY!=50){if(ui_button("Center the board")){boardPX=50;boardPY=50;ui_changed=1;}}
+      ui_group_end();
+    }
   }
   // ---- Appearance ----
   if(ui_head("Appearance",&sec_open[7],now)){
     ui_keys("These change how the preferences menu looks and reads. Apart from brightness, they never change the board, the pieces or the text shown during play.");
-    {char t[16];snprintf(t,sizeof t,"%d%%",gBright);ui_slider("Brightness (whole game)",&gBright,25,150,t);}
+    {char t[16];snprintf(t,sizeof t,"%d%%",gBright);ui_slider("Screen brightness",&gBright,25,150,t);}
     ui_keys("Brightness applies to everything on screen: the board, the side panel, the preferences menu and every overlay. 100% leaves the picture untouched.");
-    {
-     ui_select("Font",&uiFam,FONT_NAMES,7,127,0);}
-    ui_keys("Atkinson Hyperlegible is designed for low vision, and OpenDyslexic for readers with dyslexia.");
-    ui_check("Bold",&uiBold);ui_check("Italic",&uiItal);
-    ui_num("Text size (pt)",&uiPt,8,28);
-    {int y=cy;cy+=U(40);if(vis(y,U(30))){int bw=(CWd()-U(6))/2,x=PX+PW-CWd();
-       if(btn_at(x,y,bw,"Smaller")){focus_commit();uiPt=iclamp(uiPt-1,8,28);ui_changed=1;}
-       if(btn_at(x+bw+U(6),y,bw,"Larger")){focus_commit();uiPt=iclamp(uiPt+1,8,28);ui_changed=1;}}}
-    {static const char*MWN[3]={"Normal","Wide","Extra wide"},*LSN[3]={"Normal","Roomy","Very roomy"};
-     ui_select("Menu width",&mwSel,MWN,3,7,0);ui_select("Line spacing",&lsSel,LSN,3,7,0);}
-    ui_check("High contrast menu",&hiCon);
-    ui_keys("High contrast draws the menu in pure black and white with stronger lines and brighter small text.");
+    if(ui_group("Menu text",NULL,G_MTEXT)){
+      ui_select("Font",&uiFam,FONT_NAMES,7,127,0);
+      ui_keys("Atkinson Hyperlegible is designed for low vision, and OpenDyslexic for readers with dyslexia.");
+      ui_check("Bold",&uiBold);ui_check("Italic",&uiItal);
+      ui_num("Text size (pt)",&uiPt,8,28);
+      {static const char*SL[2]={"Smaller","Larger"};int k=ui_buttons(2,SL);if(k>=0){focus_commit();uiPt=iclamp(uiPt+(k?1:-1),8,28);ui_changed=1;}}
+      ui_group_end();
+    }
+    if(ui_group("Menu layout",NULL,G_MLAYOUT)){
+      static const char*MWN[3]={"Normal","Wide","Extra wide"},*LSN[3]={"Normal","Roomy","Very roomy"};
+      ui_select("Menu width",&mwSel,MWN,3,7,0);ui_select("Line spacing",&lsSel,LSN,3,7,0);
+      ui_check("High contrast menu",&hiCon);
+      ui_keys("High contrast draws the menu in pure black and white with stronger lines and brighter small text.");
+      ui_group_end();
+    }
     ui_sub("Playing");
-    {char t[16];snprintf(t,sizeof t,"%d%%",ghostStr);ui_slider("Landing outline strength",&ghostStr,20,100,t);}
+    {char t[16];snprintf(t,sizeof t,"%d%%",ghostStr);ui_slider("Landing outline",&ghostStr,20,100,t);}
     ui_check("Reduce motion",&calm);
     ui_keys("A stronger landing outline is easier to see on any board. Reduce motion stops animated backgrounds and screen shake, and caps effects at Moderate.");
     ui_sub("Preview");
     {int h=para(0,U(14),0,0,PW-U(16),LH,P.fg,1,"The quick brown fox jumps over the lazy dog. 0123456789",0)+U(12),y=cy+U(4);
      if(vis(y,h)){border_in(PX,y,PW,h,1,P.fg,1);para(0,U(14),PX+U(8),y+U(6),PW-U(16),LH,P.fg,1,"The quick brown fox jumps over the lazy dog. 0123456789",1);}cy+=h+U(12);}
-    if(btn_at(PX,cy,U(240),"Reset appearance to defaults")){uiFam=0;uiBold=0;uiItal=0;uiPt=14;hiCon=0;mwSel=0;lsSel=0;ghostStr=50;gBright=100;focus_commit();ui_changed=1;}
-    cy+=U(40);
+    if(ui_button("Reset appearance to defaults")){uiFam=0;uiBold=0;uiItal=0;uiPt=14;hiCon=0;mwSel=0;lsSel=0;ghostStr=50;gBright=100;focus_commit();ui_changed=1;}
   }
   // ---- Controls ----
   if(ui_head("Controls",&sec_open[5],now)){
-    {int y=cy;cy+=U(36);label(y,"Key bindings");if(btn_at(PX+PW-CWd(),y,CWd(),"Reset")){binds_default();ui_changed=1;bind_listen=-1;}}
     int a,s;
     for(a=0;a<N_ACTS;a++){int y=cy;cy+=U(34);if(!vis(y,U(30)))continue;label(y,ACT_NAME[a]);
       int bw=(CWd()-U(6))/2;
@@ -438,11 +466,12 @@ static void settings_panel(double now){
         text_center(0,sz,x+bw/2.0,y+U(19),(hot&&!listening)?P.bg:P.fg,1,t);
         if(uhit(x,y,bw,U(30))){bind_listen=a*2+s;focus_commit();}}}
     ui_keys("Click a key, then press the new one. Backspace clears it, Esc cancels. Esc always opens preferences. F11 toggles full screen.");
+    if(ui_button("Reset key bindings")){binds_default();ui_changed=1;bind_listen=-1;}
   }
   // ---- History ----
   if(ui_head("History",&sec_open[6],now)){
     ui_keys("Finished runs are saved on this computer with every setting used, including graphics, sound and controls.");
-    ui_num("Date offset from UTC, hours",&clkTzH,-12,14);
+    ui_num("Date offset, hours",&clkTzH,-12,14);
     {static const char*MN2[4]={"00","15","30","45"};static int mi2=0,mi2v=0;if(mi2!=mi2v)clkTzM=iclamp(mi2,0,3)*15;mi2=mi2v=clkTzM/15;ui_select("Date offset, minutes",&mi2,MN2,4,15,0);}
     ui_keys("Dates are shown in UTC plus this offset (the same one the real-time clock uses, with its daylight saving switch). 8tris never reads your device's timezone.");
     int shown=imin(nhist,25);static char L[60][400];
@@ -463,9 +492,9 @@ static void settings_panel(double now){
     if(!nhist)ui_keys("No finished runs yet.");
     if(nhist>25){snprintf(b,sizeof b,"Showing the latest 25 of %d. The export includes all of them.",nhist);ui_keys(b);}
     cy+=U(4);
-    if(btn_at(PX,cy,U(120),"Export .txt")){if(!nhist)snprintf(hmsg,sizeof hmsg,"Nothing to export yet.");else{const char*pth=export_history();if(pth)snprintf(hmsg,sizeof hmsg,"Saved to %s",pth);else snprintf(hmsg,sizeof hmsg,"Could not write the file in your home folder.");}}
-    if(btn_at(PX+U(128),cy,U(150),clear_arm?"Click again to clear":"Clear history")){if(!clear_arm)clear_arm=1;else{nhist=0;hist_save();clear_arm=0;snprintf(hmsg,sizeof hmsg,"History cleared.");}}
-    cy+=U(40);
+    {const char*HB[2]={"Export .txt",clear_arm?"Click again to clear":"Clear history"};int k=ui_buttons(2,HB);
+     if(k==0){if(!nhist)snprintf(hmsg,sizeof hmsg,"Nothing to export yet.");else{const char*pth=export_history();if(pth)snprintf(hmsg,sizeof hmsg,"Saved to %s",pth);else snprintf(hmsg,sizeof hmsg,"Could not write the file in your home folder.");}}
+     if(k==1){if(!clear_arm)clear_arm=1;else{nhist=0;hist_save();clear_arm=0;snprintf(hmsg,sizeof hmsg,"History cleared.");}}}
     if(hmsg[0])ui_keys(hmsg);
   }
   dlg_end(&scr_main);
@@ -484,9 +513,9 @@ static void settings_panel(double now){
     fill_rect(DX+DPAD,cyy+2*ch+U(7),PW,1,P.sep,1);}}
   // ---- fixed bottom: Apply / Resume / info, credit ----
   {int by=DY+DHH-DPAD-U(66)+U(8);fill_rect(DX+DPAD,by-U(8),PW,1,P.sep,1);
-   int w1=U(140),w2=U(90);
-   if(btn_at(DX+DPAD,by,w1,"Apply and restart")){focus_commit();apply_pending();menu=0;clearHeld();}
-   if(btn_at(DX+DPAD+w1+U(8),by,w2,"Resume")){focus_commit();menu=0;clearHeld();}
+   int fx=DX+DPAD;
+   if(foot_btn(&fx,by,"Apply and restart")){focus_commit();apply_pending();menu=0;clearHeld();}
+   if(foot_btn(&fx,by,"Resume")){focus_commit();menu=0;clearHeld();}
    {int x=DX+DWW-DPAD-U(22),y=by+U(4),hot=mx>=x&&mx<x+U(22)&&my>=y&&my<y+U(22);
     fill_ring(x+U(11),y+U(11),U(10.5),1.5,hot?P.fg:P.light?HEX(0x555555):HEX(0x777777),1);text_center(0,U(13),x+U(11),y+U(16),hot?P.fg:P.light?HEX(0x444444):HEX(0xaaaaaa),1,"i");
     if(mclicked&&clx>=x&&clx<x+U(22)&&cly>=y&&cly<y+U(22))about_open=1;}
@@ -504,8 +533,8 @@ static void freq_popup(double now){
   for(i=0;i<7;i++){char nm[8];snprintf(nm,sizeof nm,"%c",TN[i]);snprintf(b,sizeof b,"%d",pTw[i]);ui_slider(nm,&pTw[i],0,10,b);}
   dlg_end(&scr_freq);
   {int by=DY+DHH-DPAD-U(30);fill_rect(DX+DPAD,by-U(8),PW,1,P.sep,1);
-   if(btn_at(DX+DPAD,by,U(80),"Done"))freq_open=0;
-   if(btn_at(DX+DPAD+U(88),by,U(170),"Reset all to equal")){for(i=1;i<=11;i++)if(pWeights[i]>0)pWeights[i]=1;for(i=0;i<7;i++)pTw[i]=1;ui_changed=1;}}
+   int fx=DX+DPAD;if(foot_btn(&fx,by,"Done"))freq_open=0;
+   if(foot_btn(&fx,by,"Reset all to equal")){for(i=1;i<=11;i++)if(pWeights[i]>0)pWeights[i]=1;for(i=0;i<7;i++)pTw[i]=1;ui_changed=1;}}
 }
 
 // ---- "Theme each part" popup: one dropdown per part of the game (the presets on the Theming tab set them all at once) ----
@@ -519,7 +548,7 @@ static void parts_popup(double now){
          for(k=0;k<N_THEMES;k++){int t=THEME_ORDER[k];nm[c][k]=theme_label(c,t);if((AVAIL[c]>>t)&1)mask|=1<<k;if(t==TC[c])pos[c]=k;}
          prev[c]=pos[c];ui_select(COMP_NAME[c],&pos[c],nm[c],N_THEMES,mask,0);}}
   dlg_end(&scr_parts);
-  {int by=DY+DHH-DPAD-U(30);fill_rect(DX+DPAD,by-U(8),PW,1,P.sep,1);if(btn_at(DX+DPAD,by,U(80),"Done"))partsp_open=0;}
+  {int by=DY+DHH-DPAD-U(30);fill_rect(DX+DPAD,by-U(8),PW,1,P.sep,1);int fx=DX+DPAD;if(foot_btn(&fx,by,"Done"))partsp_open=0;}
 }
 // ---- "Filters" popup ----
 static void flt_popup(double now){
@@ -536,10 +565,9 @@ static void flt_popup(double now){
     if(fltTint)ui_color("Tint color",&fltTintC,"Tint color",1);
     snprintf(b,sizeof b,"%d%%",fltOp);ui_slider("Picture opacity",&fltOp,10,100,b);
     ui_check("Invert colors",&fltInv);
-    if(btn_at(PX,cy,U(150),"Reset filters")){fltBri=0;fltCon=100;fltSat=100;fltHue=0;fltSplit=0;fltTint=0;fltOp=100;fltInv=0;fltTintC=0xFFFF9A3Cu;ui_changed=1;}
-    cy+=U(40);
+    if(ui_button("Reset filters")){fltBri=0;fltCon=100;fltSat=100;fltHue=0;fltSplit=0;fltTint=0;fltOp=100;fltInv=0;fltTintC=0xFFFF9A3Cu;ui_changed=1;}
   dlg_end(&scr_flt);
-  {int by=DY+DHH-DPAD-U(30);fill_rect(DX+DPAD,by-U(8),PW,1,P.sep,1);if(btn_at(DX+DPAD,by,U(80),"Done"))fltp_open=0;}
+  {int by=DY+DHH-DPAD-U(30);fill_rect(DX+DPAD,by-U(8),PW,1,P.sep,1);int fx=DX+DPAD;if(foot_btn(&fx,by,"Done"))fltp_open=0;}
 }
 static void adv_popup(double now){
   int i;
@@ -555,7 +583,7 @@ static void adv_popup(double now){
     ui_color("Pieces color",&solidP,"Pieces",1);ui_color("Landing outline color",&solidG,"Landing outline",1);
   }else ui_keys("Pieces and the landing outline share one color, set under Theming. Turn this on to give each its own. These colors are used wherever Pieces or Landing outline is set to Solid Color.");
   dlg_end(&scr_adv);
-  {int by=DY+DHH-DPAD-U(30);fill_rect(DX+DPAD,by-U(8),PW,1,P.sep,1);if(btn_at(DX+DPAD,by,U(80),"Done"))advp_open=0;}
+  {int by=DY+DHH-DPAD-U(30);fill_rect(DX+DPAD,by-U(8),PW,1,P.sep,1);int fx=DX+DPAD;if(foot_btn(&fx,by,"Done"))advp_open=0;}
 }
 
 static void pk_popup(double now){
@@ -592,8 +620,8 @@ static void pk_popup(double now){
      fill_rect(x,y,w/2,h,*pk_t,1);fill_rect(x+w/2,y,w-w/2,h,pk_orig,1);border_in(x,y,w,h,1,P.fg,.8);}}
   dlg_end(&scr_pk);
   {int by=DY+DHH-DPAD-U(30);fill_rect(DX+DPAD,by-U(8),PW,1,P.sep,1);
-   if(btn_at(DX+DPAD,by,U(80),"Done")){hx_commit();pk_open=0;ui_changed=1;}
-   if(btn_at(DX+DPAD+U(88),by,U(110),"Revert")){hx_commit();*pk_t=pk_orig;ui_changed=1;}}
+   int fx=DX+DPAD;if(foot_btn(&fx,by,"Done")){hx_commit();pk_open=0;ui_changed=1;}
+   if(foot_btn(&fx,by,"Revert")){hx_commit();*pk_t=pk_orig;ui_changed=1;}}
 }
 static const char* ABOUT_INTRO="8tris starts from how modern Tetris plays and asks what happens when you can change almost everything. The ideas behind it:";
 static const char* IDEAS[5][2]={
@@ -625,7 +653,7 @@ static void about_popup(double now){
   cy+=para(0,U(11),PX,cy,PW,LH,P.fg,.5,"Music files are decoded with dr_mp3, dr_flac, dr_wav (David Reid), stb_vorbis and stb_image (Sean Barrett), all public domain or MIT-0.",1)+U(6);
   text_right(0,U(11),PX+PW,cy+U(12),P.fg,.4,"Created by Claude");cy+=U(24);
   dlg_end(&scr_about);
-  {int by=DY+DHH-DPAD-U(30);fill_rect(DX+DPAD,by-U(8),PW,1,P.sep,1);if(btn_at(DX+DPAD,by,U(80),"Close"))about_open=0;}
+  {int by=DY+DHH-DPAD-U(30);fill_rect(DX+DPAD,by-U(8),PW,1,P.sep,1);int fx=DX+DPAD;if(foot_btn(&fx,by,"Close"))about_open=0;}
 }
 
 // ---- Per-frame entry points ----

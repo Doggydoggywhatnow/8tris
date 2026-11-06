@@ -2,7 +2,7 @@
 // Every slider's value box accepts a typed number: board position (left/right, top/bottom), sound effects (a value that is derived
 // each frame), brightness, and negative ranges. Typing past the ends clamps; Escape cancels; the colour picker's RGB sliders stay drag-only.
 void plat_lock(void){} void plat_unlock(void){} void plat_fullscreen(int on){(void)on;} void plat_quit(void){} void plat_window_size(int w,int h){(void)w;(void)h;}
-int plat_thread(void(*fn)(void*),void*a){fn(a);return 1;} void plat_sleep(int ms){(void)ms;}
+int plat_thread(void(*fn)(void*),void*a){if(fn==sw_worker)return 0;fn(a);return 1;} void plat_sleep(int ms){(void)ms;}
 const char* plat_pref_dir(void){return "/tmp/8tris-sl/";} const char* plat_home_dir(void){return "/tmp/8tris-sl/";}
 static u32*fb;static double t=1000;static int bad=0;
 #define CHK(c) do{if(!(c)){bad++;printf("FAIL line %d: %s\n",__LINE__,#c);}}while(0)
