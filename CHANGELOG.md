@@ -2,6 +2,11 @@
 
 Versions are `major.minor.patch`. Until about ten changes have built up, new features are shipped as patch releases, so a patch number here can include features. This file is the real record of what changed.
 
+## 0.7.5
+- **Combo song** (Preferences, Sound): a tick box that replaces the combo sounds with a song that builds for as long as your combo chain lasts, into the hundreds. It starts at combo 2 with an arpeggio and a soft kick, then adds bass (4), hi-hats (7), full drums (10, the first big jump), pads (15), a lead melody (20), a counter-melody with octave bass (30), sparkles (40), a key change (50), a choir (60), a major-key "lucky sevens" section (70 to 79), double-time drums (80) and a final form at 100 with another key change and the lead doubled an octave up. Every combo rings a bell that climbs the scale, every 10th hits a crash and a chord stab, numbers like 11, 22, 33 and 77 play a fanfare (77, 111 and 777 add a jackpot of bells), and every 100th gets a drum roll. Breaking the chain ends the song on a final chord. It plays at every Effects level, in stereo, through its own limiter so it can get loud as it builds; all other sounds work as before. History records whether it was on.
+- Sound engine: room for twice as many notes at once, held notes for pads and melodies, and a stereo bus with its own reverb for the song.
+- New test: `test/song.c` (plays a chain offline, checks the mix, and can write it to a WAV file).
+
 ## 0.7.4
 - **Theming tab is shorter:** the per-part theme choices moved into a **Theme each part** popup, and the filters into a **Filters** popup. Both open from the Theming tab, show changes live, and close with Done or Esc. The presets stay on the tab.
 - **Fall rate is one control:** drag the slider, or click the number next to it and type an exact rate in rows per second (typed rates can go past the slider's ends, as before).

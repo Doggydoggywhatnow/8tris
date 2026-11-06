@@ -226,6 +226,7 @@ void app_frame(double now,u32*fb){
   BX=ox;BY=oy;
   draw_strip(now);
   music_tick();
+  song_tick((!paused&&!over&&!menu)||pv_on);
   if(flt_active())flt_apply();
   if(!pv_on){draw_clocks();draw_nowplaying();}
   ui_frame(now);

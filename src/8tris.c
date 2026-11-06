@@ -5,6 +5,7 @@
 #include "audio.c"   // sound synthesis
 #include "music.c"   // playing music files from the user's music folder
 #include "game.c"    // rules: pieces, bags, movement, scoring
+#include "song.c"    // the combo song (a song that builds as a combo chain grows)
 #include "swirl.c"   // the Swirl theme's drawing helpers
 #include "look.c"    // themes, board drawing, combo / perfect clear effects
 #include "store.c"   // key bindings, history, saved settings

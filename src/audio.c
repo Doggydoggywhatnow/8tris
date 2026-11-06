@@ -32,6 +32,7 @@ static const SVoice VOICES[]={
 #define NVOICES N_(VOICES)
 #define TRIM_GAIN 2.0   // +6 dB to match the loudness of the web version
 static int snd_voice=0;static double snd_vol=0.5;
+static int comboSong=0;   // "Combo song" (Sound tab): combos play a building song (song.c) instead of the usual combo sounds
 static const double LIMIT_DB=-4,BUDGET=6;
 
 // ---- The synth engine: a pool of scheduled voices mixed into one mono bus, then reverb, compressor and limiter ----
@@ -39,9 +40,11 @@ typedef struct{
   int active,noise,wave,nosc,primed;i64 start;  // active: 0 free, 1 playing, 2 reserved (being set up by the game thread, not mixed yet)
   double duty,f0,f1,dur,gain,wet,det,ph[2];     // oscillator voices
   double fc,fr,env,ea,ed,dmul;int run,decay;    // running pitch and envelope, stepped once per sample instead of recomputed with pow()
+  int bus;float pl,pr;                          // bus 1: the combo song's own stereo mix (pl, pr = left and right gains)
+  int shape;                                    // 0: pluck (fast attack, decays over the note); 1: held (20 ms attack, steady, fades over the last 30%)
   double cut0,cut1,b[5],z1,z2;                    // noise voices: low-pass sweep and filter state
 }Voice;
-#define NVOX 512
+#define NVOX 1024
 static Voice VX[NVOX];static i64 samples_done=0;
 
 static void vox_wave(Voice*v,int w){v->wave=w;v->duty=w==W_PULSE25?.25:w==W_PULSE12?.12:.5;}
@@ -50,6 +53,13 @@ static Voice* vox_new(double delay,double dur){
   for(i=0;i<NVOX;i++)if(!VX[i].active){Voice*v=&VX[i];memset(v,0,sizeof*v);v->active=2;v->start=samples_done+(i64)(delay*SR);v->dur=dur;plat_unlock();return v;}
   plat_unlock();return NULL;
 }
+// A voice that starts at an exact sample (used by the combo song, which schedules its notes on a beat grid).
+static Voice* vox_at(i64 start,double dur){
+  int i;plat_lock();
+  for(i=0;i<NVOX;i++)if(!VX[i].active){Voice*v=&VX[i];memset(v,0,sizeof*v);v->active=2;v->start=start;v->dur=dur;plat_unlock();return v;}
+  plat_unlock();return NULL;
+}
+static i64 audio_clock(void){i64 t;plat_lock();t=samples_done;plat_unlock();return t;}
 // Hands a fully set-up voice to the audio thread. Until then it is skipped, so it is never mixed half-initialized.
 static void vox_go(Voice*v){plat_lock();v->active=1;plat_unlock();}
 // One oscillator note. role picks the wave from the current voice; to = glide target (0 for none); wet = reverb send.
@@ -84,7 +94,8 @@ static void biquad_lp(double fc,double q,double*b){
   b[0]=(1-cw)/2/a0;b[1]=(1-cw)/a0;b[2]=b[0];b[3]=-2*cw/a0;b[4]=(1-al)/a0;
 }
 // Render one voice into the dry and reverb-send buses for samples [base, base+n).
-static void vox_render(Voice*v,float*dry,float*snd,i64 base,int n){
+// Song voices (bus 1) go to their own stereo buses sl/sr and reverb send ss; everything else to the mono effect buses.
+static void vox_render(Voice*v,float*dry,float*snd,float*sl,float*sr,float*ss,i64 base,int n){
   int i;i64 end=v->start+(i64)(v->dur*SR);
   for(i=0;i<n;i++){
     i64 gi=base+i;if(gi<v->start)continue;if(gi>=end){v->active=0;return;}
@@ -99,31 +110,35 @@ static void vox_render(Voice*v,float*dry,float*snd,i64 base,int n){
       if(!v->run){v->run=1;v->fc=v->f0;v->fr=pow(v->f1/v->f0,1.0/dmax(v->dur*SR,1));v->env=1e-4;v->ea=pow(v->gain/1e-4,1.0/(.006*SR));
         v->ed=pow(1e-4/v->gain,1.0/(dmax(v->dur-.006,1e-4)*SR));v->dmul=pow(2,v->det/1200);}
       f=v->fc;v->fc*=v->fr;
-      if(t<.006){env=v->env;v->env*=v->ea;}
+      if(v->shape==1){double r=t>v->dur*.7?(v->dur-t)/(v->dur*.3):1;env=v->gain*dmin(1,t/.02)*dmax(r,0);}
+      else if(t<.006){env=v->env;v->env*=v->ea;}
       else{if(!v->decay){v->decay=1;v->env=v->gain*pow(1e-4/v->gain,dmin((t-.006)/dmax(v->dur-.006,1e-4),1));}env=v->env;v->env=dmax(v->env*v->ed,1e-4);}
       x=0;for(k=0;k<v->nosc;k++){double ff=k?f*v->dmul:f,d2=ff/SR;x+=osc_sample(v->wave,v->duty,v->ph[k],d2);v->ph[k]+=d2;if(v->ph[k]>=1)v->ph[k]-=1;}
       x*=env;
     }
-    dry[i]+=(float)x;snd[i]+=(float)(x*v->wet);
+    if(v->bus){sl[i]+=(float)x*v->pl;sr[i]+=(float)x*v->pr;ss[i]+=(float)(x*v->wet);}else{dry[i]+=(float)x;snd[i]+=(float)(x*v->wet);}
   }
   if(base+n>=end)v->active=0;
 }
 
-// Freeverb-style reverb (8 combs + 4 all-passes), tuned for a tail of about 1.3 seconds.
+// Freeverb-style reverb (8 combs + 4 all-passes), tuned for a tail of about 1.3 seconds. Sound effects and the combo song each have one.
 static const int CT[8]={1116,1188,1277,1356,1422,1491,1557,1617},AT[4]={556,441,341,225};
-static float *cb[8],*ab[4];static int cp[8],ap_[4];static float cs[8];static int rv_ready=0;static double rv_scale=1;
-static float reverb_tick(float in){
+typedef struct{float*cb[8],*ab[4];int cp[8],ap[4];float cs[8];}Rv;
+static Rv rv_fx,rv_song;static int rv_ready=0;static double rv_scale=1;
+static float reverb_tick(Rv*r,float in){
   float o=0;int i;float x=in*.015f;
-  for(i=0;i<8;i++){float y=cb[i][cp[i]];cs[i]=y*.75f+cs[i]*.25f;cb[i][cp[i]]=x+cs[i]*.84f;if(++cp[i]>=CT[i])cp[i]=0;o+=y;}
-  for(i=0;i<4;i++){float y=ab[i][ap_[i]];float z=o-y;ab[i][ap_[i]]=o+y*.5f;o=z;if(++ap_[i]>=AT[i])ap_[i]=0;}
+  for(i=0;i<8;i++){float y=r->cb[i][r->cp[i]];r->cs[i]=y*.75f+r->cs[i]*.25f;r->cb[i][r->cp[i]]=x+r->cs[i]*.84f;if(++r->cp[i]>=CT[i])r->cp[i]=0;o+=y;}
+  for(i=0;i<4;i++){float y=r->ab[i][r->ap[i]];float z=o-y;r->ab[i][r->ap[i]]=o+y*.5f;o=z;if(++r->ap[i]>=AT[i])r->ap[i]=0;}
   return o;
 }
+static void reverb_clear(Rv*r){int i;for(i=0;i<8;i++){memset(r->cb[i],0,CT[i]*4);r->cp[i]=0;r->cs[i]=0;}for(i=0;i<4;i++){memset(r->ab[i],0,AT[i]*4);r->ap[i]=0;}}
 static void reverb_init(void){
-  int i;if(rv_ready)return;for(i=0;i<8;i++){cb[i]=(float*)calloc(CT[i],4);cp[i]=0;cs[i]=0;}for(i=0;i<4;i++){ab[i]=(float*)calloc(AT[i],4);ap_[i]=0;}
+  int i,k;if(rv_ready)return;
+  for(k=0;k<2;k++){Rv*r=k?&rv_song:&rv_fx;for(i=0;i<8;i++)r->cb[i]=(float*)calloc(CT[i],4);for(i=0;i<4;i++)r->ab[i]=(float*)calloc(AT[i],4);}
   // Calibrate so the wet signal carries about 0.6 of the dry level (like the convolver reverb in the web version).
-  double pin=0,pout=0;for(i=0;i<SR*2;i++){float x=(float)(rnd()*2-1);float y=reverb_tick(x);pin+=x*x;pout+=y*y;}
+  double pin=0,pout=0;for(i=0;i<SR*2;i++){float x=(float)(rnd()*2-1);float y=reverb_tick(&rv_fx,x);pin+=x*x;pout+=y*y;}
   rv_scale=sqrt(.36*pin/pout);
-  for(i=0;i<8;i++){memset(cb[i],0,CT[i]*4);cp[i]=0;cs[i]=0;}for(i=0;i<4;i++){memset(ab[i],0,AT[i]*4);ap_[i]=0;}rv_ready=1;
+  reverb_clear(&rv_fx);reverb_clear(&rv_song);rv_ready=1;
 }
 // Compressor (threshold -24 dB, ratio 12, soft knee) followed by a look-ahead limiter at LIMIT_DB.
 static double comp_env=0,lim_gain=1;static float lim_dly[64];static int lim_pos=0;static float lim_need[64];
@@ -140,15 +155,30 @@ static float master_tick(float x){
   if(mn<lim_gain)lim_gain=mn;else lim_gain+=(1-lim_gain)*.002;
   int rp=(lim_pos+1)&63;float o=lim_dly[rp]*(float)lim_gain;lim_pos=(lim_pos+1)&63;return o;
 }
+// The combo song skips the effects compressor (which would flatten its build-up) and only meets this stereo look-ahead limiter.
+#define SONG_GAIN 2.6
+static float slim_gain=1,slim_dl[64],slim_dr[64],slim_need[64];static int slim_pos=0;static int song_bus_on=0;
+static void song_limit(float*l,float*r){
+  static float ceil_=0;if(ceil_==0)ceil_=(float)pow(10,-1.5/20);
+  float a=fmaxf(fabsf(*l),fabsf(*r));slim_dl[slim_pos]=*l;slim_dr[slim_pos]=*r;slim_need[slim_pos]=a>ceil_?ceil_/a:1;
+  float mn=1;int i;for(i=0;i<64;i++)if(slim_need[i]<mn)mn=slim_need[i];
+  if(mn<slim_gain)slim_gain=mn;else slim_gain+=(1-slim_gain)*.0004f;
+  int rp=(slim_pos+1)&63;*l=slim_dl[rp]*slim_gain;*r=slim_dr[rp]*slim_gain;slim_pos=rp;
+}
 static void music_mix(float*out,int n);
 static void audio_mix(float*out,int n){
-  static float dry[8192],snd[8192];int i,k;if(n>8192)n=8192;
-  reverb_init();memset(dry,0,n*4);memset(snd,0,n*4);
+  static float dry[8192],snd[8192],sl[8192],sr[8192],ss[8192];int i,k;if(n>8192)n=8192;
+  reverb_init();memset(dry,0,n*4);memset(snd,0,n*4);memset(sl,0,n*4);memset(sr,0,n*4);memset(ss,0,n*4);
   plat_lock();
-  for(k=0;k<NVOX;k++)if(VX[k].active==1)vox_render(&VX[k],dry,snd,samples_done,n);
+  int song=0;for(k=0;k<NVOX;k++)if(VX[k].active==1){if(VX[k].bus)song=1;vox_render(&VX[k],dry,snd,sl,sr,ss,samples_done,n);}
   samples_done+=n;plat_unlock();
+  if(song)song_bus_on=SR*3;   // keep the song's reverb and limiter running a little after the last note, for the tail
   for(i=0;i<n;i++){float d=dry[i],w=snd[i];if(!(d>-1e6f&&d<1e6f))d=0;if(!(w>-1e6f&&w<1e6f))w=0;   // a bad sample can never poison the reverb
-    float x=(d+reverb_tick(w)*(float)rv_scale)*(float)snd_vol*(float)TRIM_GAIN;float y=master_tick(x);out[2*i]=y;out[2*i+1]=y;}
+    float x=(d+reverb_tick(&rv_fx,w)*(float)rv_scale)*(float)snd_vol*(float)TRIM_GAIN;float y=master_tick(x);out[2*i]=y;out[2*i+1]=y;}
+  if(song_bus_on>0){song_bus_on-=n;float g=(float)(snd_vol*SONG_GAIN);
+    for(i=0;i<n;i++){float l=sl[i],r=sr[i],w=ss[i];if(!(l>-1e6f&&l<1e6f))l=0;if(!(r>-1e6f&&r<1e6f))r=0;if(!(w>-1e6f&&w<1e6f))w=0;
+      float rv=reverb_tick(&rv_song,w)*(float)rv_scale;l=(l+rv)*g;r=(r+rv)*g;song_limit(&l,&r);
+      float a=out[2*i]+l,b=out[2*i+1]+r;out[2*i]=a>1?1:a<-1?-1:a;out[2*i+1]=b>1?1:b<-1?-1:b;}}
   music_mix(out,n);
 }
 

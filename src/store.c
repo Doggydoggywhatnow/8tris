@@ -27,14 +27,14 @@ static const char* key_label(int k){
 }
 
 // ---- History: every finished run is saved with every setting that was in use ----
-typedef struct{int W,H,slots;double fall;int lvl,clear;int weights[11];int tw[7];int themeOn;int theme[N_COMPS];int fx,pf,sc,sp,sd,vol;int keys[N_ACTS][2];}Snap;
+typedef struct{int W,H,slots;double fall;int lvl,clear;int weights[11];int tw[7];int themeOn;int theme[N_COMPS];int fx,pf,sc,sp,sd,vol;int keys[N_ACTS][2];int song;}Snap;
 typedef struct{i64 t;int why,score,lines,level,time,pieces,combo,dirty;Snap s;}Hist;
 #define MAXHIST 200
 static Hist hist[MAXHIST];static int nhist=0;
 static void snapshot(Snap*s){
   int i;memset(s,0,sizeof*s);s->W=W;s->H=H;s->slots=slots;s->fall=floor(rateOf(fallV)*100+.5)/100;s->lvl=lvlSys;s->clear=clearOn;
   for(i=0;i<11;i++)s->weights[i]=weights[i+1];for(i=0;i<7;i++)s->tw[i]=tw[i];s->themeOn=themeOn;for(i=0;i<N_COMPS;i++)s->theme[i]=TC[i];
-  s->fx=fxLevel;s->pf=pcLevel;s->sc=sndCombo;s->sp=sndPf;s->sd=sdRate;s->vol=(int)floor(snd_vol*100+.5);memcpy(s->keys,binds,sizeof binds);
+  s->fx=fxLevel;s->pf=pcLevel;s->sc=sndCombo;s->sp=sndPf;s->sd=sdRate;s->vol=(int)floor(snd_vol*100+.5);memcpy(s->keys,binds,sizeof binds);s->song=comboSong;
 }
 static const char* get_pref_path(const char*name){static char b[600];snprintf(b,sizeof b,"%s%s",plat_pref_dir(),name);return b;}
 
@@ -72,7 +72,7 @@ static int hist_save(void){
     fprintf(f,"t=%lld why=%d score=%d lines=%d level=%d time=%d pieces=%d combo=%d dirty=%d",(long long)h->t,h->why,h->score,h->lines,h->level,h->time,h->pieces,h->combo,h->dirty);
     fprintf(f," W=%d H=%d slots=%d fall=%g lvl=%d clear=%d",q->W,q->H,q->slots,q->fall,q->lvl,q->clear);
     ints_out(f,"weights",q->weights,11);ints_out(f,"tw",q->tw,7);fprintf(f," themeOn=%d",q->themeOn);ints_out(f,"theme",q->theme,N_COMPS);
-    fprintf(f," fx=%d pf=%d sc=%d sp=%d sd=%d vol=%d",q->fx,q->pf,q->sc,q->sp,q->sd,q->vol);ints_out(f,"keys",&q->keys[0][0],N_ACTS*2);fprintf(f,"\n");}
+    fprintf(f," fx=%d pf=%d sc=%d sp=%d sd=%d vol=%d song=%d",q->fx,q->pf,q->sc,q->sp,q->sd,q->vol,q->song);ints_out(f,"keys",&q->keys[0][0],N_ACTS*2);fprintf(f,"\n");}
   return safe_close(f,tmp,dst);
 }
 static int parse_ints(const char*s,int*out,int n);
@@ -92,7 +92,7 @@ static int hist_parse(char*line,Hist*h){
     else if(!strcmp(k,"weights"))parse_ints(v,q->weights,11);else if(!strcmp(k,"tw"))parse_ints(v,q->tw,7);
     else if(!strcmp(k,"themeOn"))q->themeOn=iv;else if(!strcmp(k,"theme"))parse_ints(v,q->theme,N_COMPS);
     else if(!strcmp(k,"fx"))q->fx=iv;else if(!strcmp(k,"pf"))q->pf=iv;else if(!strcmp(k,"sc"))q->sc=iv;else if(!strcmp(k,"sp"))q->sp=iv;
-    else if(!strcmp(k,"sd"))q->sd=iv;else if(!strcmp(k,"vol"))q->vol=iv;else if(!strcmp(k,"keys"))parse_ints(v,&q->keys[0][0],N_ACTS*2);
+    else if(!strcmp(k,"sd"))q->sd=iv;else if(!strcmp(k,"vol"))q->vol=iv;else if(!strcmp(k,"song"))q->song=iv?1:0;else if(!strcmp(k,"keys"))parse_ints(v,&q->keys[0][0],N_ACTS*2);
   }
   return got;
 }
@@ -145,7 +145,8 @@ static int setting_lines(const Snap*s,char out[][400],int cap){
   if(s->themeOn){b[0]=0;for(i=0;i<N_COMPS;i++)snprintf(b+strlen(b),sizeof b-strlen(b),"%s%s %s",i?", ":"",COMP_NAME[i],theme_label(i,s->theme[i]));LINE("Theming: on (%s)",b);}else LINE("Theming: off (8tris look)");
   LINE("Visual effects: combo %s, perfect clear %s",FXN[iclamp(s->fx,0,4)],FXN[iclamp(s->pf,0,4)]);
   if(s->vol>0)snprintf(b,sizeof b,"%d%%",s->vol);else snprintf(b,sizeof b,"off");
-  LINE("Sound: %s | combo sound %s, perfect clear sound %s",b,FXN[iclamp(s->sc,0,4)],FXN[iclamp(s->sp,0,4)]);
+  if(s->song)LINE("Sound: %s | combo song, perfect clear sound %s",b,FXN[iclamp(s->sp,0,4)]);
+  else LINE("Sound: %s | combo sound %s, perfect clear sound %s",b,FXN[iclamp(s->sc,0,4)],FXN[iclamp(s->sp,0,4)]);
   b[0]=0;for(i=0;i<N_ACTS;i++){char t[120];const char*k0=key_label(s->keys[i][0]),*k1=key_label(s->keys[i][1]);
     if(s->keys[i][0]&&s->keys[i][1])snprintf(t,120,"%s %s or %s",ACT_NAME[i],k0,k1);else if(s->keys[i][0])snprintf(t,120,"%s %s",ACT_NAME[i],k0);else if(s->keys[i][1])snprintf(t,120,"%s %s",ACT_NAME[i],k1);else snprintf(t,120,"%s none",ACT_NAME[i]);
     snprintf(b+strlen(b),sizeof b-strlen(b),"%s%s",i?"; ":"",t);}
@@ -174,7 +175,7 @@ static void save_settings(void){
   if(store_off)return;
   char tmp[640],dst[600];snprintf(dst,sizeof dst,"%s",get_pref_path("settings.txt"));FILE*f=safe_open(dst,tmp,sizeof tmp);if(!f)return;int i;
   fprintf(f,"grid=%d,%d\nslots=%d\nfall=%g\nlvl=%d\nclear=%d\nsd=%d\nvol=%d\nthemeOn=%d\ncalm=%d\nfxm=%d\nadv=%d,%d,%d,%d\nsolid=%06x,%06x,%d\nui=%d,%d,%d,%d,%d,%d,%d,%d\n",W,H,slots,fallV,lvlSys,clearOn,sdRate,(int)floor(snd_vol*100+.5),themeOn,calm,fxMaster,ADV[0],ADV[1],ADV[2],ADV[3],(unsigned)(solidP&0xFFFFFF),(unsigned)(solidG&0xFFFFFF),solidSep,uiFam,uiBold,uiItal,uiPt,hiCon,mwSel,lsSel,ghostStr);
-  fprintf(f,"res=%d\nfps=%d\nshowfps=%d\nnowplay=%d,%d,%d,%d,%d,%d,%d,%d,%d\nmusic=%d,%d\nmusicfile=%s\nnext=%d\nprefbtn=%d\nboardpos=%d,%d\ntimer=%d,%d,%d,%d,%d,%d\nclock=%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\nstack=%d,%d\nfilters=%d,%d,%d,%d,%d,%d,%d,%d,%06x\n",resSet,fpsSet,showFps,NP.on,NP.pos,NP.sz,NP.op,NP.fam,NP.bold,npArt,npArtSz,npArtist,musMode,musVol,musFile,NQ,prefBtn,boardPX,boardPY,
+  fprintf(f,"res=%d\nfps=%d\nshowfps=%d\ncombosong=%d\nnowplay=%d,%d,%d,%d,%d,%d,%d,%d,%d\nmusic=%d,%d\nmusicfile=%s\nnext=%d\nprefbtn=%d\nboardpos=%d,%d\ntimer=%d,%d,%d,%d,%d,%d\nclock=%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\nstack=%d,%d\nfilters=%d,%d,%d,%d,%d,%d,%d,%d,%06x\n",resSet,fpsSet,showFps,comboSong,NP.on,NP.pos,NP.sz,NP.op,NP.fam,NP.bold,npArt,npArtSz,npArtist,musMode,musVol,musFile,NQ,prefBtn,boardPX,boardPY,
     CLK[0].on,CLK[0].pos,CLK[0].sz,CLK[0].op,CLK[0].fam,CLK[0].bold,CLK[1].on,CLK[1].pos,CLK[1].sz,CLK[1].op,CLK[1].fam,CLK[1].bold,clkTzH,clkTzM,clkDst,clk24,clkSecs,stackV,stackFirst,
     fltBri,fltCon,fltSat,fltHue,fltSplit,fltTint,fltOp,fltInv,(unsigned)(fltTintC&0xFFFFFF));
   fprintf(f,"weights=");for(i=1;i<=11;i++)fprintf(f,"%d%s",weights[i],i<11?",":"\n");
@@ -206,6 +207,7 @@ static void load_settings(void){
     else if(!strcmp(k,"res"))resSet=iclamp(atoi(val),0,6);
     else if(!strcmp(k,"fps"))fpsSet=iclamp(atoi(val),0,9);
     else if(!strcmp(k,"showfps"))showFps=atoi(val)!=0;
+    else if(!strcmp(k,"combosong"))comboSong=atoi(val)!=0;
     else if(!strcmp(k,"boardpos")){if(parse_ints(val,v,2)==2){boardPX=iclamp(v[0],0,100);boardPY=iclamp(v[1],0,100);}}
     else if(!strcmp(k,"nowplay")){if(parse_ints(val,v,9)==9){NP.on=v[0]?1:0;NP.pos=iclamp(v[1],0,5);NP.sz=iclamp(v[2],10,48);NP.op=iclamp(v[3],10,100);NP.fam=iclamp(v[4],0,6);NP.bold=v[5]?1:0;npArt=v[6]?1:0;npArtSz=iclamp(v[7],32,256);npArtist=v[8]?1:0;}}
     else if(!strcmp(k,"music")){if(parse_ints(val,v,2)==2){musMode=iclamp(v[0],0,3);musVol=iclamp(v[1],0,100);}}

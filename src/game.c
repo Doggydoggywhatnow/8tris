@@ -245,7 +245,7 @@ static void lock_piece(void){
     {int empty=1;for(i=0;i<W*H;i++)if(board[i]){empty=0;break;}if(empty){score+=floor(PCB[imin(n,4)]*wf)*lm;pc=1;}}
     if(combo>1)score+=10*(combo-1)*lm;
     level=curLevel();fxClear(rows,nrows);sfx(S_CLEAR,tspin?4:n,NOW);
-    if(combo>=2)fx_sound(EV_COMBO,sndCombo,combo);
+    if(combo>=2&&!comboSong)fx_sound(EV_COMBO,sndCombo,combo);   // with the combo song on, song.c plays the combo instead
     if(pc){pfStart();fx_sound(EV_PERFECT,sndPf,1);}
     if(level>lv0)sfx(S_LEVEL,0,NOW);
   }else{fx_break();combo=0;}
