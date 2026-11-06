@@ -2,6 +2,11 @@
 
 Versions are `major.minor.patch`. Until about ten changes have built up, new features are shipped as patch releases, so a patch number here can include features. This file is the real record of what changed.
 
+## 0.7.4
+- **Theming tab is shorter:** the per-part theme choices moved into a **Theme each part** popup, and the filters into a **Filters** popup. Both open from the Theming tab, show changes live, and close with Done or Esc. The presets stay on the tab.
+- **Fall rate is one control:** drag the slider, or click the number next to it and type an exact rate in rows per second (typed rates can go past the slider's ends, as before).
+- New test: `test/popups.c`; `test/order.c` now checks the per-part list in its popup.
+
 ## 0.7.3
 Saving, privacy and a code audit. No features were removed.
 - **History is now a plain text file** (`history.txt`, one run per line). Older and newer versions can read each other's history: unknown details are skipped and missing ones are left blank, instead of the whole history being ignored. The old `history.bin` is converted on first launch, checked, and then removed, so "Clear history" really clears everything.

@@ -6,6 +6,7 @@ static Clk NP={0,3,16,85,0,0};static int npArt=1,npArtSz=72,npArtist=1;   // "no
 static int clkTzH=0,clkTzM=0,clkDst=0,clk24=1,clkSecs=0,stackV=1,stackFirst=0;   // clock: UTC offset typed by the user (hours, minutes), daylight saving +1h, 24-hour, seconds; stacking of the two when they share a place
 // Filters over the whole game picture (not the menu): brightness -50..50, contrast %, saturation %, hue degrees, color split px, tint strength %, opacity %, invert, tint color.
 static int fltBri=0,fltCon=100,fltSat=100,fltHue=0,fltSplit=0,fltTint=0,fltOp=100,fltInv=0;static u32 fltTintC=0xFFFF9A3Cu;
+static int flt_active(void){return fltBri||fltCon!=100||fltSat!=100||fltHue||fltSplit||fltTint||fltOp!=100||fltInv;}
 static int boardPX=50,boardPY=50;   // where the board sits in the play area: 0 = left/top, 50 = centered, 100 = right/bottom
 static int prefBtn=6;   // where the Preferences button sits: 0-5 corners and edges of the play area, 6 = bottom of the side panel (default)
 static int resSet=0,fpsSet=0,showFps=0,fullscreen=0;   // display settings: render resolution choice, refresh-rate choice, frame-rate counter, full screen

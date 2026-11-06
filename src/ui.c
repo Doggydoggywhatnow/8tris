@@ -113,6 +113,20 @@ static int ui_numd(const char*lab,double*v,double lo,double hi,double*out){
   else{snprintf(b,16,"%.2f",*v);text_mid(0,U(14),x+U(8),y,h,P.fg,1,b);}
   return 0;
 }
+static void fall_typed(double rate);
+// Fall rate: drag the slider, or click the number and type an exact rate (rows per second; a typed rate may go past the slider's ends).
+static void ui_fall(void){
+  const char*lab="Fall rate (rows/s)";int y=cy,x=PX+PW-CWd(),w=CWd(),h=U(30);unsigned id=hid(lab,1),fid=hid(lab,3);cy+=U(36);if(!vis(y,h))return;
+  label(y,lab);int bw=U(72),bx=x+w-bw,tx=x+U(6),tw=w-bw-U(18);
+  if(uhit(tx-U(6),y,tw+U(12),h))active_id=id;
+  if(active_id==id&&mdown){double nv=floor(dclamp((double)(mx-tx)/tw*100,0,100)+.5);if(nv!=fallV){fallV=nv;ui_changed=1;if(pieces>0&&!over)runDirty=1;}}
+  double fr=dclamp(fallV/100,0,1);fill_rect(tx,y+h/2,tw,2,P.fg,.5);fill_rect(tx,y+h/2,tw*fr,2,P.fg,1);fill_rect(tx+tw*fr-U(5),y+h/2-U(8),U(10),U(17),P.fg,1);
+  if(uhit(bx,y,bw,h)&&focus_id!=fid){focus_commit();focus_id=fid;f_fresh=1;snprintf(fbuf,sizeof fbuf,"%.2f",rateOf(fallV));{int n=(int)strlen(fbuf);while(n>1&&fbuf[n-1]=='0'){fbuf[--n]=0;}if(n>0&&fbuf[n-1]=='.')fbuf[n-1]=0;}f_ptr=NULL;f_dptr=&fallV;f_lo=50;f_hi=1000000;}
+  box(bx,y,bw,h,0);char b[16];
+  if(focus_id==fid){f_x=bx;f_y=y;f_w=bw;f_h=h;snprintf(b,16,"%s",fbuf);border_in(bx,y,bw,h,2,P.fg,1);if(f_fresh)fill_rect(bx+U(8),y+U(5),text_w(0,U(14),b),h-U(10),P.fg,.35);text_mid(0,U(14),bx+U(8),y,h,P.fg,1,b);
+    if(((int)(NOW/500))%2)fill_rect(bx+U(8)+text_w(0,U(14),b)+1,y+U(6),1,h-U(12),P.fg,1);}
+  else{double r=rateOf(fallV);snprintf(b,16,r<10?"%.2f":r<100?"%.1f":"%.0f",r);text_mid(0,U(14),bx+U(8),y,h,P.fg,1,b);}
+}
 static int ui_slider(const char*lab,int*v,int lo,int hi,const char*vt){
   int y=cy,x=PX+PW-CWd(),w=CWd(),h=U(30);unsigned id=hid(lab,1);int rv=0;cy+=U(36);if(!vis(y,h))return 0;
   label(y,lab);int tx=x+U(4),tw=w-U(74);
@@ -174,7 +188,7 @@ static void ui_color(const char*lab,u32*c,const char*pname,int pick){
 
 // ---- dialogs: a frame with a scrolling middle, a fixed top and a fixed bottom ----
 typedef struct{int scroll,ch;}Scr;
-static Scr scr_main,scr_freq,scr_about,scr_adv,scr_pk;
+static Scr scr_main,scr_freq,scr_about,scr_adv,scr_pk,scr_parts,scr_flt;
 static int DX,DY,DWW,DHH,DPAD;
 static void dlg_begin(Scr*s,int dw,int top,int bot,double now){
   DPAD=U(14);int maxh=FH-2*U(16),want=DPAD*2+top+s->ch+bot,dh=s->ch?imin(want,maxh):maxh;
@@ -206,6 +220,7 @@ static void apply_pending(void){
   pend_load();reset_game();ui_changed=1;
 }
 static int freq_open=0,about_open=0,bind_listen=-1;
+static int partsp_open=0,fltp_open=0;   // the "Theme each part" and "Filters" popups (from the Theming tab)
 static int advp_open=0,hist_open[MAXHIST],clear_arm=0;
 static char hmsg[800]="";
 // ---- effect preview: plays a sample combo and perfect clear (with sound) over the live board ----
@@ -242,9 +257,7 @@ static void settings_panel(double now){
   if(ui_head("Game",&sec_open[0],now)){
     ui_num("Width",&pW,4,500);ui_num("Height",&pH,4,500);
     {int y=cy;cy+=U(36);if(vis(y,U(30))){label(y,"Standard size");if(btn_at(PX+PW-CWd(),y,CWd(),"Reset to 10 \xC3\x97 20")){pW=10;pH=20;focus_commit();ui_changed=1;}}}ui_num("Hold slots",&pSlots,1,10);
-    snprintf(b,sizeof b,"%.2f rows/s",rateOf(fallV));
-    {int sv=iclamp((int)floor(fallV+.5),0,100);if(ui_slider("Fall rate",&sv,0,100,b)){fallV=sv;if(pieces>0&&!over)runDirty=1;}}
-    {double r=rateOf(fallV);ui_numd("Fall rate (rows/s)",&r,.05,1000,&fallV);}
+    ui_fall();
     {int sdv=sdRate;ui_num("Soft drop (rows/s)",&sdRate,1,500);(void)sdv;}
     if(ui_check("Level system",&lvlSys)){if(pieces>0&&!over)runDirty=1;level=curLevel();}
     ui_keys("With the level system on, the fall rate starts at your setting and speeds up every 100 cleared cells (10 lines on a 10-wide board), following the standard modern Tetris curve.");
@@ -273,11 +286,8 @@ static void settings_panel(double now){
       {int x=PX,k;for(k=0;k<N_THEMES;k++){int t=THEME_ORDER[k],w=(int)text_w(0,U(14),THEME_NAME[t])+U(20);
         if(x>PX&&x+w>PX+PW){x=PX;cy+=U(36);}
         if(btn_at(x,cy,w,THEME_NAME[t])){int c;for(c=0;c<N_COMPS;c++)if((AVAIL[c]>>t)&1)TC[c]=t;ui_changed=1;}x+=w+U(6);}cy+=U(40);}
-      {int c;static const char*nm[N_COMPS][N_THEMES];static int pos[N_COMPS],prev[N_COMPS];   // pos: the theme's place in the list (a menu choice writes here)
-       for(c=0;c<N_COMPS;c++){int k,mask=0;
-         if(pos[c]!=prev[c])TC[c]=THEME_ORDER[pos[c]];                        // a choice was made last frame
-         for(k=0;k<N_THEMES;k++){int t=THEME_ORDER[k];nm[c][k]=theme_label(c,t);if((AVAIL[c]>>t)&1)mask|=1<<k;if(t==TC[c])pos[c]=k;}
-         prev[c]=pos[c];ui_select(COMP_NAME[c],&pos[c],nm[c],N_THEMES,mask,0);}}
+      ui_keys("Or give each part its own theme: the page, side panel, menu, board frame, board, grid, pieces, landing outline, effect colors and sound voice.");
+      if(btn_at(PX,cy,U(200),"Theme each part\xE2\x80\xA6"))partsp_open=1;cy+=U(40);
       if(TC[C_PIECES]==TH_SOLID||TC[C_GHOST]==TH_SOLID){
         ui_sub("Solid Color");
         if(!solidSep){ui_color("Color",&solidP,"Pieces and landing outline",1);
@@ -287,18 +297,8 @@ static void settings_panel(double now){
       }
     }
     ui_sub("Filters");
-    ui_keys("Filters change the whole game picture on top of whichever themes are chosen. The menu and the timer and clock are not filtered.");
-    snprintf(b,sizeof b,"%+d",fltBri);ui_slider("Brightness",&fltBri,-50,50,b);
-    snprintf(b,sizeof b,"%d%%",fltCon);ui_slider("Contrast",&fltCon,50,150,b);
-    snprintf(b,sizeof b,"%d%%",fltSat);ui_slider("Saturation",&fltSat,0,200,b);
-    snprintf(b,sizeof b,"%d deg",fltHue);ui_slider("Hue shift",&fltHue,0,359,b);
-    snprintf(b,sizeof b,"%d px",fltSplit);ui_slider("Color split",&fltSplit,0,12,b);
-    snprintf(b,sizeof b,"%d%%",fltTint);ui_slider("Tint strength",&fltTint,0,100,b);
-    if(fltTint)ui_color("Tint color",&fltTintC,"Tint color",1);
-    snprintf(b,sizeof b,"%d%%",fltOp);ui_slider("Picture opacity",&fltOp,10,100,b);
-    ui_check("Invert colors",&fltInv);
-    if(btn_at(PX,cy,U(150),"Reset filters")){fltBri=0;fltCon=100;fltSat=100;fltHue=0;fltSplit=0;fltTint=0;fltOp=100;fltInv=0;fltTintC=0xFFFF9A3Cu;ui_changed=1;}
-    cy+=U(40);
+    ui_keys(flt_active()?"Filters are on. They change the whole game picture on top of whichever themes are chosen.":"Brightness, contrast, saturation, hue, color split, tint, opacity and invert, over any theme. All off right now.");
+    if(btn_at(PX,cy,U(150),"Filters\xE2\x80\xA6"))fltp_open=1;cy+=U(40);
     {
      
      static const char*MN[4]={"00","15","30","45"};static const char*NM[2]={"Timer","Clock"};
@@ -493,6 +493,39 @@ static void freq_popup(double now){
    if(btn_at(DX+DPAD+U(88),by,U(170),"Reset all to equal")){for(i=1;i<=11;i++)if(pWeights[i]>0)pWeights[i]=1;for(i=0;i<7;i++)pTw[i]=1;ui_changed=1;}}
 }
 
+// ---- "Theme each part" popup: one dropdown per part of the game (the presets on the Theming tab set them all at once) ----
+static void parts_popup(double now){
+  dlg_begin(&scr_parts,U(340*MWF[mwSel]),0,U(46),now);
+  {int one=1;ui_head("Theme each part",&one,now);}
+  ui_keys("Each part of the game can use any theme that has a version for it. Changes show right away.");
+      {int c;static const char*nm[N_COMPS][N_THEMES];static int pos[N_COMPS],prev[N_COMPS];   // pos: the theme's place in the list (a menu choice writes here)
+       for(c=0;c<N_COMPS;c++){int k,mask=0;
+         if(pos[c]!=prev[c])TC[c]=THEME_ORDER[pos[c]];                        // a choice was made last frame
+         for(k=0;k<N_THEMES;k++){int t=THEME_ORDER[k];nm[c][k]=theme_label(c,t);if((AVAIL[c]>>t)&1)mask|=1<<k;if(t==TC[c])pos[c]=k;}
+         prev[c]=pos[c];ui_select(COMP_NAME[c],&pos[c],nm[c],N_THEMES,mask,0);}}
+  dlg_end(&scr_parts);
+  {int by=DY+DHH-DPAD-U(30);fill_rect(DX+DPAD,by-U(8),PW,1,P.sep,1);if(btn_at(DX+DPAD,by,U(80),"Done"))partsp_open=0;}
+}
+// ---- "Filters" popup ----
+static void flt_popup(double now){
+  char b[64];
+  dlg_begin(&scr_flt,U(340*MWF[mwSel]),0,U(46),now);
+  {int one=1;ui_head("Filters",&one,now);}
+    ui_keys("Filters change the whole game picture on top of whichever themes are chosen. The menu and the timer and clock are not filtered.");
+    snprintf(b,sizeof b,"%+d",fltBri);ui_slider("Brightness",&fltBri,-50,50,b);
+    snprintf(b,sizeof b,"%d%%",fltCon);ui_slider("Contrast",&fltCon,50,150,b);
+    snprintf(b,sizeof b,"%d%%",fltSat);ui_slider("Saturation",&fltSat,0,200,b);
+    snprintf(b,sizeof b,"%d deg",fltHue);ui_slider("Hue shift",&fltHue,0,359,b);
+    snprintf(b,sizeof b,"%d px",fltSplit);ui_slider("Color split",&fltSplit,0,12,b);
+    snprintf(b,sizeof b,"%d%%",fltTint);ui_slider("Tint strength",&fltTint,0,100,b);
+    if(fltTint)ui_color("Tint color",&fltTintC,"Tint color",1);
+    snprintf(b,sizeof b,"%d%%",fltOp);ui_slider("Picture opacity",&fltOp,10,100,b);
+    ui_check("Invert colors",&fltInv);
+    if(btn_at(PX,cy,U(150),"Reset filters")){fltBri=0;fltCon=100;fltSat=100;fltHue=0;fltSplit=0;fltTint=0;fltOp=100;fltInv=0;fltTintC=0xFFFF9A3Cu;ui_changed=1;}
+    cy+=U(40);
+  dlg_end(&scr_flt);
+  {int by=DY+DHH-DPAD-U(30);fill_rect(DX+DPAD,by-U(8),PW,1,P.sep,1);if(btn_at(DX+DPAD,by,U(80),"Done"))fltp_open=0;}
+}
 static void adv_popup(double now){
   int i;
   dlg_begin(&scr_adv,U(340*MWF[mwSel]),0,U(46),now);
@@ -590,9 +623,11 @@ static void ui_frame(double now){
   if(pv_on){pv_tick();}
   else if(menu){
     int sx=mx,sy=my,sc=mclicked;double sw=wheel_acc;
-    if(freq_open||about_open||advp_open||pk_open){mx=my=-9999;mclicked=0;wheel_acc=0;}
+    if(freq_open||about_open||advp_open||pk_open||partsp_open||fltp_open){mx=my=-9999;mclicked=0;wheel_acc=0;}
     settings_panel(now);
     mx=sx;my=sy;mclicked=sc;wheel_acc=sw;
+    if(partsp_open){int s1=mx,s2=my,s3=mclicked;double s4=wheel_acc;if(about_open||pk_open){mx=my=-9999;mclicked=0;wheel_acc=0;}parts_popup(now);mx=s1;my=s2;mclicked=s3;wheel_acc=s4;}
+    if(fltp_open){int s1=mx,s2=my,s3=mclicked;double s4=wheel_acc;if(about_open||pk_open){mx=my=-9999;mclicked=0;wheel_acc=0;}flt_popup(now);mx=s1;my=s2;mclicked=s3;wheel_acc=s4;}
     if(advp_open){int s1=mx,s2=my,s3=mclicked;double s4=wheel_acc;if(about_open||freq_open||pk_open){mx=my=-9999;mclicked=0;wheel_acc=0;}adv_popup(now);mx=s1;my=s2;mclicked=s3;wheel_acc=s4;}
     if(freq_open&&!pk_open){int s1=mx,s2=my,s3=mclicked;double s4=wheel_acc;if(about_open){mx=my=-9999;mclicked=0;wheel_acc=0;}freq_popup(now);mx=s1;my=s2;mclicked=s3;wheel_acc=s4;}
     if(about_open)about_popup(now);
@@ -618,7 +653,7 @@ static int ui_key(int key,int down){
     bind_listen=-1;ui_changed=1;clearHeld();save_settings();return 1;
   }
   if(!down)return 1;
-  if(!hx_id&&!focus_id&&!sel_open&&!advp_open&&!freq_open&&!about_open&&!pk_open){
+  if(!hx_id&&!focus_id&&!sel_open&&!advp_open&&!freq_open&&!about_open&&!pk_open&&!partsp_open&&!fltp_open){
     if(key==K_PGDN)scr_main.scroll+=U(320);else if(key==K_PGUP)scr_main.scroll-=U(320);else if(key==K_DOWN)scr_main.scroll+=U(56);else if(key==K_UP)scr_main.scroll-=U(56);
     else if(key==K_HOME)scr_main.scroll=0;else if(key==K_END)scr_main.scroll=1<<20;
     if(scr_main.scroll<0)scr_main.scroll=0;
@@ -643,7 +678,7 @@ static int ui_key(int key,int down){
     return 1;
   }
   if(key==K_ESC){
-    if(sel_open)sel_open=0;else if(pk_open)pk_open=0;else if(about_open)about_open=0;else if(freq_open)freq_open=0;else if(advp_open)advp_open=0;else{menu=0;clearHeld();}
+    if(sel_open)sel_open=0;else if(pk_open)pk_open=0;else if(about_open)about_open=0;else if(freq_open)freq_open=0;else if(advp_open)advp_open=0;else if(fltp_open)fltp_open=0;else if(partsp_open)partsp_open=0;else{menu=0;clearHeld();}
     return 1;
   }
   return 1;

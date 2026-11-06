@@ -174,7 +174,6 @@ static void draw_clocks(void){
   }
 }
 // ---- Filters: one pass over the finished game picture (not the menu). Everything except the color split is a single 3x4 color matrix. ----
-static int flt_active(void){return fltBri||fltCon!=100||fltSat!=100||fltHue||fltSplit||fltTint||fltOp!=100||fltInv;}
 static void flt_mul(double M[3][4],const double A[3][4]){double n[3][4];int r,c,k;for(r=0;r<3;r++)for(c=0;c<4;c++){n[r][c]=(c==3)?A[r][3]:0;for(k=0;k<3;k++)n[r][c]+=A[r][k]*M[k][c];}memcpy(M,n,sizeof n);}
 static void flt_apply(void){
   double M[3][4]={{1,0,0,0},{0,1,0,0},{0,0,1,0}},A[3][4];int r,c;
