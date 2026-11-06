@@ -2,6 +2,10 @@
 
 Versions are `major.minor.patch`. Until about ten changes have built up, new features are shipped as patch releases, so a patch number here can include features. This file is the real record of what changed.
 
+## 0.7.8
+- The repository no longer contains any shell scripts. The AppImage launcher is now a tiny static C program (`appimage/launcher.c`, same behavior: system SDL2 first, bundled copy as a fallback), and the two build commands are in the README instead of `build.sh`.
+- New test: `test/compat.c` checks that settings files written by older versions (or damaged by hand) load without losing anything they contain, never disturb settings they do not mention, clamp out-of-range values, and that save then load is lossless for every key.
+
 ## 0.7.7
 - The combo song's description no longer gives away what happens along the way (here and in the README too).
 
