@@ -2,6 +2,9 @@
 
 Versions are `major.minor.patch`. Until about ten changes have built up, new features are shipped as patch releases, so a patch number here can include features. This file is the real record of what changed.
 
+## 0.7.12
+- Combo song: the crash cymbal is softer and less harsh (darker, quieter and shorter), and it plays less often: the repeating crashes come half as often, and the every-10th-combo crash now lands on every 20th. The kick and chord stabs on every 10th are unchanged.
+
 ## 0.7.11
 - Combo song: every combo increase now adds its own note of a melody that fits the song, a marimba-style pluck in the current key and chord. The notes wander smoothly, never repeat twice in a row, and land on chord tones on strong beats. This replaces the earlier two-note blip and the climbing bell.
 - New check in `test/song.c` for that melody.

@@ -42,7 +42,7 @@ static void snoise(i64 at,double dur,double g,double cut,double cut2,double wet)
 static void s_kick(i64 at,double g){song_pan=0;sn(at,150,.28,W_SINE,.36*g,0,42,0,1,0);snoise(at,.02,.12*g,4000,0,0);}
 static void s_snare(i64 at,double g){song_pan=.05;snoise(at,.2,.32*g,5000,1800,.25);sn(at,190,.08,W_TRI,.14*g,.1,160,0,1,0);}
 static void s_hat(i64 at,double g){song_pan=.35;snoise(at,.035,.07*g,11000,0,0);}
-static void s_crash(i64 at,double g){song_pan=-.25;snoise(at,1.8,.26*g,9000,2500,.5);}
+static void s_crash(i64 at,double g){song_pan=-.25;snoise(at,1.4,.15*g,5200,1300,.4);}   // a soft, darker wash rather than a bright splash
 
 // Everything that plays on one 16th-note step.
 static void song_step_play(long step,i64 at,int c){
@@ -55,7 +55,7 @@ static void song_step_play(long step,i64 at,int c){
   if(c>=20&&bar%4==3&&s>=12)s_snare(at,.35+.12*(s-12));                       // a fill at the end of every phrase
   if(c>=30){s_hat(at,s%2?1:.55);}else if(c>=7&&s%4==2)s_hat(at,1);
   if(c>=60&&s%4==0){song_pan=.5;}if(c>=60&&s%4==0)sn(at,song_f(&m,ch[0],4),.25,W_SINE,.025,.4,0,0,1,0);     // ride bell
-  if(s==0&&((c>=20&&bar%8==0)||(c>=100&&bar%2==0)))s_crash(at,c>=100?.8:.6);
+  if(s==0&&((c>=20&&bar%16==0)||(c>=100&&bar%4==0)))s_crash(at,c>=100?.7:.55);
   // bass: 8ths, then octave jumps, then a gallop
   {int on=c>=80?1:(s%2==0);if(c>=4&&on){int oct=(c>=30&&((c>=80?s%4==2:s%4==2)))?1:0;
      song_pan=0;sn(at,song_f(&m,ch[0],-1+oct),L*(c>=80?.9:1.8),W_SAW,.16,.05,0,0,1,0);}}
@@ -97,7 +97,7 @@ static void song_milestone(int k,i64 at){
   // every combo adds one note of a melody that fits the song: a marimba-style pluck in the current key and chord
   {int strong=(song_step%4)==0,d=song_tick_deg(k,root,strong,song_lastd);song_lastd=d;double f=song_f(&m,d,3);song_pan=(k%2?.25:-.25);
    sn(at,f,.3,W_TRI,.16,.3,0,0,1,0);sn(at,f*2,.15,W_SINE,.07,.3,0,0,1,0);sn(at,f*.5,.18,W_SINE,.07,.1,0,0,1,0);}
-  if(k%10==0){s_crash(at,1);s_kick(at,1.2);
+  if(k%10==0){if(k%20==0)s_crash(at,1);s_kick(at,1.2);
     for(i=0;i<3;i++)if((song_pan=(i-1)*.5),1)sn(at,song_f(&m,root+2*i,2),.6,W_SAW,.07,.4,0,1,2,12);
     sn(at,110*pow(2,m.key/12.0),1.1,W_SINE,.5,0,32,0,1,0);}                     // sub drop
   if(song_repdigit(k)||k==77){
