@@ -346,8 +346,7 @@ static void settings_panel(double now){
     if(ui_slider("Sound effects",&pv,0,100,b))snd_vol=pv/100.0;
     ui_keys("The sound voice and which sounds play with effects are set in Theming.");
     ui_check("Combo song",&comboSong);
-    ui_keys(comboSong?"On: a combo chain plays a song that builds as it grows, into the hundreds. Drums kick in at 10, a melody at 20, the key changes every 50, 70 to 79 turn major, 100 is the final form, and 11, 22, 77 and friends get fanfares. It replaces the combo sounds at every Effects level; everything else sounds as usual."
-                     :"Turn on to replace combo sounds with a song that builds as your combo chain grows, into the hundreds, with big moments every 10 combos and at numbers like 11 and 77.");
+    ui_keys("Replaces the combo sounds with a song that builds for as long as your combo chain lasts. Keep the chain going and see where it goes.");
     ui_sub("Music");
     {static const char*MM[4]={"Off","Repeat one track","Play all in order","Play all shuffled"};static int was=0;
      if(!was){music_scan();}was=1;
