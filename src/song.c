@@ -5,7 +5,7 @@
 //  15 pads                      20 lead melody    30 counter-melody, octave bass, 16th hats
 //  40 sparkles                  50 key change     60 choir           70-79 "lucky sevens": the song turns major
 //  80 double-time drums         100 final form: key change, lead doubled an octave up, crashes all over
-// Every combo also rings a note that climbs the scale. Every 10th combo hits a crash and a chord stab, numbers like 11, 22 and
+// Every combo also rings a note that climbs the scale, plus the same short two-note blip each time the combo goes up. Every 10th combo hits a crash and a chord stab, numbers like 11, 22 and
 // 77 play a fanfare (77 and 777 hit a jackpot of bells), and every 100th gets a drum roll. When the chain breaks the song ends
 // on a final chord. Notes are scheduled a fraction of a second ahead on a 16th-note grid, straight onto the audio clock.
 // The song plays at every Effects level and replaces combo sounds only; everything else still sounds as usual.
@@ -86,6 +86,8 @@ static void song_milestone(int k,i64 at){
   SongMode m=song_mode(k);long bar=song_step/16;int root=song_chord(k,bar),i;double L=song_len;
   // every combo: a bell that climbs the scale (wrapping every three octaves)
   {int d=(k-2)%21;song_pan=(k%2?.3:-.3);sn(at,song_f(&m,root+d,3),.35,W_SINE,.09,.35,0,0,1,0);sn(at,song_f(&m,root+d,4),.2,W_TRI,.03,.35,0,0,1,0);}
+  // and the same short two-note blip every time the combo goes up (tonic, then the fifth), so each step is easy to hear
+  {song_pan=0;sn(at,song_f(&m,0,3),.11,W_PULSE25,.11,.15,0,0,1,0);sn(at+(i64)(.065*SR),song_f(&m,4,3),.16,W_PULSE25,.11,.2,0,0,1,0);}
   if(k%10==0){s_crash(at,1);s_kick(at,1.2);
     for(i=0;i<3;i++)if((song_pan=(i-1)*.5),1)sn(at,song_f(&m,root+2*i,2),.6,W_SAW,.07,.4,0,1,2,12);
     sn(at,110*pow(2,m.key/12.0),1.1,W_SINE,.5,0,32,0,1,0);}                     // sub drop

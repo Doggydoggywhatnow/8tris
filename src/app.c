@@ -174,6 +174,13 @@ static void draw_clocks(void){
     }
   }
 }
+// ---- Brightness: one lookup-table pass over the finished picture, menu and overlays included. Skipped entirely at 100%. ----
+static void bright_apply(void){
+  static unsigned char lut[256];static int last=-1;int i;
+  if(last!=gBright){for(i=0;i<256;i++){int v=(i*gBright+50)/100;lut[i]=(unsigned char)(v>255?255:v);}last=gBright;}
+  u32*p=FB;size_t n=(size_t)FW*FH,k;
+  for(k=0;k<n;k++){u32 c=p[k];p[k]=(c&0xFF000000u)|((u32)lut[(c>>16)&255]<<16)|((u32)lut[(c>>8)&255]<<8)|lut[c&255];}
+}
 // ---- Filters: one pass over the finished game picture (not the menu). Everything except the color split is a single 3x4 color matrix. ----
 static void flt_mul(double M[3][4],const double A[3][4]){double n[3][4];int r,c,k;for(r=0;r<3;r++)for(c=0;c<4;c++){n[r][c]=(c==3)?A[r][3]:0;for(k=0;k<3;k++)n[r][c]+=A[r][k]*M[k][c];}memcpy(M,n,sizeof n);}
 static void flt_apply(void){
@@ -233,6 +240,7 @@ void app_frame(double now,u32*fb){
   ui_frame(now);
   {static double t0=0;static int n=0;static double fps=0;n++;if(now-t0>=500){fps=n*1000.0/(now-t0);n=0;t0=now;}
    if(showFps&&!pv_on){char b[64];snprintf(b,sizeof b,"%.0f fps  %d\xC3\x97%d",fps,WW,WH);double sz=12*UZ;int w=(int)text_w(0,sz,b)+12*UZ;fill_rect(6,6,w,22*UZ,HEX(0),.6);text_mid(0,sz,12,6,22*UZ,HEX(0xffffff),1,b);}}
+  if(gBright!=100)bright_apply();   // last of all, so it covers the menu and every overlay too
 }
 
 // ---- Built-in smoke test: `8tris --selftest` plays a scripted game with the menu and effects, mixes audio, and checks the output. ----

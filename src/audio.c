@@ -4,7 +4,7 @@
 //   UI      one-shot gameplay blips: {pitch Hz, seconds, wave role, gain, glide-to Hz}.
 //   LAYERS  the building blocks of a combo or perfect clear sound. Each layer plays a few notes through the current voice.
 //   LADDER  which layers each Effects level adds. Every level keeps the layers of the levels below it.
-// To add a voice: add an entry to VOICES (and a name to the voice list in the Theming code).
+// To add a voice: add an entry to VOICES and map its theme to it in voice_of() in look.c.
 // To add a layer: write a function like L_melody, give it a weight in SHARE, and list it in LADDER at the level where it should arrive.
 // To add a sound event: add it to EV and call fx_sound(event, level, combo).
 // Loudness is capped three ways: SHARE and BUDGET keep the total weight of the active layers bounded, the master volume sets
@@ -28,7 +28,17 @@ static const SVoice VOICES[]={
  {"Classic chiptune",{W_PULSE25,W_TRI,W_TRI,W_SQUARE,W_PULSE12},1,.85,0,.03,.85,130.81,7,{0,2,4,5,7,9,11},{0,4,7,12},4,{1,1.25,1.5,2},7,{0,4,7,12,16,19,24},6,{1,1.25,1.5,2,2.5,3}},
  {"Wild",{W_SAW,W_TRI,W_SINE,W_SAW,W_SAW},1.26,1.3,14,.2,.7,130.81,7,{0,2,4,6,7,9,11},{0,4,7,11},4,{1,1.26,1.5,1.89},8,{0,4,7,11,14,18,19,23},8,{1,1.26,1.41,1.5,2,2.52,3,4}},
  // Swirl: glassy sine and triangle tones with a chorus, every note scooping upward, a dreamy whole-tone scale, augmented chords and lots of reverb.
- {"Swirl",{W_SINE,W_TRI,W_SINE,W_TRI,W_SINE},1.5,1.2,9,.4,.8,164.81,7,{0,2,4,6,8,10,12},{0,4,8,12},4,{1,1.26,1.587,2},7,{0,4,8,12,16,20,24},6,{1,1.26,1.587,2,2.52,3.17},3.5}};
+ {"Swirl",{W_SINE,W_TRI,W_SINE,W_TRI,W_SINE},1.5,1.2,9,.4,.8,164.81,7,{0,2,4,6,8,10,12},{0,4,8,12},4,{1,1.26,1.587,2},7,{0,4,8,12,16,20,24},6,{1,1.26,1.587,2,2.52,3.17},3.5},
+ // Light: bright and airy. Glassy triangle and sine tones, a little higher than 8tris, a major scale with an added ninth, short and clean.
+ {"Light",{W_TRI,W_SINE,W_SINE,W_TRI,W_SINE},1.12,.9,3,.12,.95,196,7,{0,2,4,7,9,11,14},{0,4,7,14},5,{1,1.26,1.5,1.89,2.25},7,{0,4,7,11,14,16,19},6,{1,1.26,1.5,1.89,2.52,3}},
+ // Graphite: dry and mechanical. Narrow pulse leads, tight and muted, no reverb, a minor pentatonic scale, a little lower than 8tris.
+ {"Graphite",{W_PULSE25,W_TRI,W_TRI,W_SQUARE,W_SQUARE},.9,.75,0,0,.85,110,7,{0,3,5,7,10,12,15},{0,3,7,12},4,{1,1.2,1.5,2},7,{0,3,7,10,12,15,19},6,{1,1.2,1.5,2,2.4,3}},
+ // Dark: deep and moody. Low sine and triangle tones with a saw underneath, long notes, slow detune and a darker minor scale with a flat second.
+ {"Dark",{W_SINE,W_TRI,W_SINE,W_SAW,W_SINE},.75,1.45,6,.3,.9,98,7,{0,1,3,5,7,8,10},{0,3,7,10},4,{1,1.2,1.5,1.78},7,{0,3,7,10,12,15,19},6,{1,1.2,1.5,1.78,2,2.4}},
+ // Chocolate: warm and mellow. Rounded triangle and sine tones, slightly low, a dorian scale and soft major-seventh chords with a gentle room.
+ {"Chocolate",{W_TRI,W_SINE,W_TRI,W_TRI,W_SINE},.85,1.25,5,.22,1,123.47,7,{0,2,3,5,7,9,10},{0,4,7,11},4,{1,1.26,1.5,1.89},7,{0,4,7,11,14,16,19},6,{1,1.26,1.5,1.89,2.25,3}},
+ // Milk: smooth and creamy. Only sines and triangles, long soft notes with a roomy tail, a lydian scale and rich major-ninth chords.
+ {"Milk",{W_SINE,W_SINE,W_TRI,W_TRI,W_SINE},1,1.5,4,.35,1.05,174.61,7,{0,2,4,6,7,9,11},{0,4,7,11},5,{1,1.26,1.5,1.89,2.25},7,{0,4,7,11,14,18,23},6,{1,1.26,1.5,1.89,2.25,3}}};
 #define NVOICES N_(VOICES)
 #define TRIM_GAIN 2.0   // +6 dB to match the loudness of the web version
 static int snd_voice=0;static double snd_vol=0.5;

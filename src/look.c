@@ -1,34 +1,37 @@
 // ===== THEMES, BOARD DRAWING AND EFFECTS =====
 // Theming: every visual part is its own component and each component can use any theme that defines it.
 enum{C_PAGE,C_PANEL,C_MENU,C_FRAME,C_BOARD,C_GRID,C_PIECES,C_GHOST,C_EFFECTS,C_SOUND,N_COMPS};
-enum{TH_MIN,TH_CLASSIC,TH_WILD,TH_SWIRL,TH_SOLID,TH_LIGHT,TH_GRAPHITE,TH_DARK,TH_CHOC,N_THEMES};
+enum{TH_MIN,TH_CLASSIC,TH_WILD,TH_SWIRL,TH_SOLID,TH_LIGHT,TH_GRAPHITE,TH_DARK,TH_CHOC,TH_MILK,N_THEMES};
 static const char*COMP_NAME[N_COMPS]={"Page background","Side panel","Preferences menu","Board frame","Board background","Grid lines","Pieces","Landing outline","Effect colors","Sound voice"};
-static const char*THEME_NAME[N_THEMES]={"8tris","Classic","Wild","Swirl","Solid Color","8tris Light","Graphite","8tris Dark","Chocolate"};
+static const char*THEME_NAME[N_THEMES]={"8tris","Classic","Wild","Swirl","Solid Color","8tris Light","Graphite","8tris Dark","Chocolate","Milk"};
 // The order themes are listed in the menus. Theme numbers never change (they are saved in preferences and pick sound voices), only this list does.
-static const int THEME_ORDER[N_THEMES]={TH_MIN,TH_LIGHT,TH_DARK,TH_GRAPHITE,TH_CHOC,TH_CLASSIC,TH_SOLID,TH_SWIRL,TH_WILD};
+static const int THEME_ORDER[N_THEMES]={TH_MIN,TH_LIGHT,TH_DARK,TH_GRAPHITE,TH_CHOC,TH_MILK,TH_CLASSIC,TH_SOLID,TH_SWIRL,TH_WILD};
 // Which themes define each component (bit 0 = 8tris, bit 1 = Classic, bit 2 = Wild, bit 3 = Swirl, bit 4 = Solid Color, bit 5 = 8tris Light, bit 6 = Graphite,
 // bit 7 = 8tris Dark, bit 8 = Chocolate). Add a theme to a component by setting its bit. Graphite, 8tris Dark and Chocolate cover every component.
-static const int AVAIL[N_COMPS]={109|384,109|384,109|384,109|384,109|384,109|384,127|384,125|384,111|384,111|384};
+static const int AVAIL[N_COMPS]={109|896,109|896,109|896,109|896,109|896,109|896,127|896,125|896,111|896,111|896};
 // Solid Color theme: one hex color for the pieces and one for the landing outline. They stay equal unless solidSep is on.
 static u32 solidP=0xFF4F9DFFu,solidG=0xFF4F9DFFu;static int solidSep=0;
 // Appearance (preferences menu only, plus the landing outline strength): font family, bold, italic, text size in pt, high contrast, menu width, line spacing.
-static int uiFam=0,uiBold=0,uiItal=0,uiPt=14,hiCon=0,mwSel=0,lsSel=0,ghostStr=50;
+static int uiFam=0,uiBold=0,uiItal=0,uiPt=14,hiCon=0,mwSel=0,lsSel=0,ghostStr=50,gBright=100;   // gBright: whole-picture brightness in percent (100 = untouched)
 static u32 ghost_solid(void){return solidSep?solidG:solidP;}
 static int themeOn=0,TC[N_COMPS];static int calm=0;      // calm = reduce motion (freezes animation, softer effects, effects capped at Moderate)
 static int T(int c){return themeOn?TC[c]:TH_MIN;}
 static int LT(int c){return T(c)==TH_LIGHT;}                  // 8tris Light: the 8tris look with black and white swapped
 static int LG(int c){return T(c)==TH_GRAPHITE;}               // Graphite: 8tris with light grey pieces on a white board
 static int pale(int c){return LT(c)||LG(c);}                    // the component is drawn on a white/pale background
-static int snd_theme(void){int t=T(C_SOUND);return(t==TH_LIGHT||t==TH_GRAPHITE||t==TH_DARK||t==TH_CHOC)?TH_MIN:t;}   // these use the 8tris voice   // 8tris Light has no voice of its own, it uses the 8tris one
+static int snd_theme(void){   // the sound voice for the chosen theme: an index into VOICES in audio.c
+  switch(T(C_SOUND)){case TH_CLASSIC:return 1;case TH_WILD:return 2;case TH_SWIRL:return 3;case TH_LIGHT:return 4;case TH_GRAPHITE:return 5;case TH_DARK:return 6;case TH_CHOC:return 7;case TH_MILK:return 8;default:return 0;}}
 static const char* theme_label(int comp,int t){if(comp==C_SOUND&&t==TH_CLASSIC)return "Classic chiptune";return (t>=0&&t<N_THEMES)?THEME_NAME[t]:"?";}
 static double tm(double now){return calm?0:now;}
 
 // Flat themes: one fixed palette per theme, used for every component. 8tris Dark is the 8tris look turned down: black, with dark
 // grey blocks and a faint grid. Chocolate is dark brown with light (milk chocolate) brown pieces and cream text.
-typedef struct{u32 page,panel,line,btn,frame,board,grid,piece,edge,ghost,text,spark,flash,mbg,mfg,mln,msep;}Flat;
-static const Flat FLAT_DARK={0x000000,0x000000,0x262626,0x6e6e6e,0x333333,0x000000,0x161616,0x3a3a3a,0x4e4e4e,0x404040,0x9a9a9a,0x5a5a5a,0x5a5a5a,0x000000,0xa8a8a8,0x5c5c5c,0x262626};
+typedef struct{u32 page,panel,line,btn,frame,board,grid,piece,edge,ghost,text,spark,flash,mbg,mfg,mln,msep;int light;}Flat;
+static const Flat FLAT_DARK={0x000000,0x000000,0x171717,0x555555,0x1f1f1f,0x000000,0x0b0b0b,0x262626,0,0x2c2c2c,0x808080,0x404040,0x404040,0x000000,0x909090,0x3c3c3c,0x181818};   // edge 0 = pieces have no outline
 static const Flat FLAT_CHOC={0x1e120c,0x170d08,0x3d281c,0xc9a27c,0x7a5638,0x26170f,0x352218,0xc49a6c,0xa67c52,0xa67c52,0xecdcc8,0xd9a066,0xf0e0cc,0x1e120c,0xecdcc8,0xa67c52,0x3d281c};
-static const Flat* flat(int c){int t=T(c);return t==TH_DARK?&FLAT_DARK:t==TH_CHOC?&FLAT_CHOC:NULL;}
+// Milk: cream-white page and board, pure white pieces with a pale bottle-blue edge, soft slate text.
+static const Flat FLAT_MILK={0xf8f5ee,0xffffff,0xe4ded0,0x7c8794,0xc9d2dc,0xe9e3d2,0xdcd5c3,0xffffff,0xa9b6c6,0x93a3b6,0x3b4552,0x8fa3ba,0x9fb4cc,0xfbf9f4,0x333c47,0xb8c2ce,0xe6e1d5,1};
+static const Flat* flat(int c){int t=T(c);return t==TH_DARK?&FLAT_DARK:t==TH_CHOC?&FLAT_CHOC:t==TH_MILK?&FLAT_MILK:NULL;}
 // Layout (set each frame by app_frame)
 static int S=28,BX=0,BY=0,SHX=0,SHY=0;   // cell size, board origin, current screen-shake offset
 
@@ -37,7 +40,7 @@ static u32 piece_base(int ci,double now){int t=T(C_PIECES);{const Flat*f=flat(C_
 static void piece_paint(double x,double y,double s,int ci,double now,int gx,int gy){
   int t=T(C_PIECES);
   if(t==TH_MIN){fill_rect(x,y,s,s,HEX(0xbdbdbd),1);return;}
-  {const Flat*f=flat(C_PIECES);if(f){fill_rect(x,y,s,s,HEX(f->piece),1);if(s>=6)border_in(x,y,s,s,s>=20?2:1,HEX(f->edge),1);return;}}
+  {const Flat*f=flat(C_PIECES);if(f){fill_rect(x,y,s,s,HEX(f->piece),1);if(f->edge&&s>=6)border_in(x,y,s,s,s>=20?2:1,HEX(f->edge),1);return;}}
   if(t==TH_SOLID){fill_rect(x,y,s,s,solidP,1);return;}
   if(t==TH_LIGHT){fill_rect(x,y,s,s,HEX(0x000000),1);return;}
   if(t==TH_GRAPHITE){fill_rect(x,y,s,s,HEX(0xb8b8b8),1);return;}
@@ -250,7 +253,7 @@ static void draw_board(double now){
 static void draw_cover(int preview){
   if(!(paused||over)||preview)return;double w=W*S,h=H*S;char buf[96];
   clip(BX,BY,BX+(int)w,BY+(int)h);fill_rect(BX,BY,w,h,pale(C_BOARD)?HEX(0xffffff):flat(C_BOARD)?HEX(flat(C_BOARD)->board):HEX(0),.8);
-  u32 ct=pale(C_BOARD)?HEX(0x101010):flat(C_BOARD)?HEX(flat(C_BOARD)==&FLAT_CHOC?FLAT_CHOC.text:0xb0b0b0):HEX(0xe0e0e0);
+  u32 ct=pale(C_BOARD)?HEX(0x101010):flat(C_BOARD)?HEX(flat(C_BOARD)==&FLAT_DARK?0x909090:flat(C_BOARD)->text):HEX(0xe0e0e0);
   double fs=dmax(12,dmin(32,w/7));
   text_center(0,fs,BX+w/2,BY+h/2,ct,1,over?"Game over":"Paused");
   if(over){if(clearOn)snprintf(buf,sizeof buf,"Score %d. Press %s.",(int)floor(score),key_label(bind_key(A_RESTART,0)));else snprintf(buf,sizeof buf,"Press %s to restart.",key_label(bind_key(A_RESTART,0)));}

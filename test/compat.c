@@ -40,8 +40,8 @@ int main(void){
   reset_defaults();put("futurekey=1,2,3\nfall=2\nnext=7,9,9,9\nboardpos=50,50,50\ntimer=1,2,30,80,3,1,99\n# a comment\n\n=\nnoequals\n");load_settings();
   CHK(fabs(fallV-2)<1e-9);CHK(NQ==7);CHK(boardPX==50&&boardPY==50);CHK(CLK[0].on==1&&CLK[0].pos==2&&CLK[0].sz==30&&CLK[0].op==80&&CLK[0].fam==3&&CLK[0].bold==1);
   // 4. values from a hand edit or a newer version that are out of range are clamped, never trusted
-  reset_defaults();put("grid=9999,-5\nslots=99\nfall=1e9\nsd=0\nvol=500\nfxm=40\nres=77\nfps=99\nnext=-3\nprefbtn=99\nboardpos=-10,900\nmusic=9,500\n");load_settings();
-  CHK(W==500&&H==4&&slots==10&&fallV<=130.0001&&sdRate==1&&fabs(snd_vol-1)<1e-9&&fxMaster==4&&resSet==6&&fpsSet==9&&NQ==0&&prefBtn==6&&boardPX==0&&boardPY==100&&musMode==3&&musVol==100);
+  reset_defaults();put("grid=9999,-5\nbright=900\nslots=99\nfall=1e9\nsd=0\nvol=500\nfxm=40\nres=77\nfps=99\nnext=-3\nprefbtn=99\nboardpos=-10,900\nmusic=9,500\n");load_settings();
+  CHK(gBright==150&&W==500&&H==4&&slots==10&&fallV<=130.0001&&sdRate==1&&fabs(snd_vol-1)<1e-9&&fxMaster==4&&resSet==6&&fpsSet==9&&NQ==0&&prefBtn==6&&boardPX==0&&boardPY==100&&musMode==3&&musVol==100);
   // 5. damaged files: empty, binary junk, a truncated line, a huge line, missing final newline
   reset_defaults();put("");load_settings();save_settings();rd_set(cur,sizeof cur);CHK(same_except(cur,""));
   {char junk[3000];int i;for(i=0;i<3000;i++)junk[i]=(char)(i*37+11);junk[2999]=0;put(junk);reset_defaults();put(junk);load_settings();}
@@ -50,10 +50,10 @@ int main(void){
   // a music file name with a path in it is refused (it could point outside the music folder)
   reset_defaults();put("musicfile=../../etc/passwd\n");load_settings();CHK(musFile[0]==0);
   // 6. save -> load is lossless for every key: load file A (everything changed), save, load file B (a different set), reload A's save, save again
-  {const char*A="grid=17,33\nslots=3\nfall=7.25\nlvl=1\nclear=0\nsd=77\nvol=35\nthemeOn=1\ncalm=1\nfxm=1\nadv=1,2,3,0\nsolid=abcdef,123456,0\nui=3,1,0,19,1,2,1,45\nres=2\nfps=5\nshowfps=1\ncombosong=1\nnowplay=1,3,22,55,4,1,1,96,1\nmusic=2,41\nmusicfile=song.mp3\nnext=9\nprefbtn=4\nboardpos=23,77\ntimer=1,5,40,66,2,1\nclock=1,6,28,44,5,0,-7,45,1,1,1\nstack=1,1\nfilters=12,110,130,200,9,25,70,1,aabbcc\nweights=3,0,1,2,3,4,5,6,7,8,9\ntw=9,8,7,6,5,4,3\n";
+  {const char*A="grid=17,33\nslots=3\nfall=7.25\nlvl=1\nclear=0\nsd=77\nvol=35\nthemeOn=1\ncalm=1\nfxm=1\nadv=1,2,3,0\nsolid=abcdef,123456,0\nui=3,1,0,19,1,2,1,45\nbright=80\nres=2\nfps=5\nshowfps=1\ncombosong=1\nnowplay=1,3,22,55,4,1,1,96,1\nmusic=2,41\nmusicfile=song.mp3\nnext=9\nprefbtn=4\nboardpos=23,77\ntimer=1,5,40,66,2,1\nclock=1,6,28,44,5,0,-7,45,1,1,1\nstack=1,1\nfilters=12,110,130,200,9,25,70,1,aabbcc\nweights=3,0,1,2,3,4,5,6,7,8,9\ntw=9,8,7,6,5,4,3\n";
    const char*B="grid=5,6\nslots=9\nfall=0.1\nvol=99\nnext=1\nprefbtn=1\nstack=0,0\nclock=0,0,12,10,0,0,3,0,0,0,0\n";
    reset_defaults();put(A);load_settings();save_settings();char s1[8000],s2[8000];rd_set(s1,sizeof s1);
-   CHK(W==17&&H==33&&slots==3&&fabs(fallV-7.25)<1e-9&&sdRate==77&&NQ==9&&prefBtn==4&&boardPX==23&&boardPY==77&&comboSong==1&&showFps==1&&resSet==2&&fpsSet==5);
+   CHK(W==17&&H==33&&slots==3&&fabs(fallV-7.25)<1e-9&&sdRate==77&&gBright==80&&NQ==9&&prefBtn==4&&boardPX==23&&boardPY==77&&comboSong==1&&showFps==1&&resSet==2&&fpsSet==5);
    CHK(NP.on==1&&NP.pos==3&&NP.sz==22&&npArt==1&&npArtSz==96&&npArtist==1&&musMode==2&&musVol==41&&!strcmp(musFile,"song.mp3"));
    CHK(CLK[1].on==1&&CLK[1].pos==6&&clkTzH==-7&&clkTzM==45&&clkDst==1&&clk24==1&&clkSecs==1&&stackV==1&&stackFirst==1);
    CHK(fltBri==12&&fltCon==110&&fltSat==130&&fltHue==200&&fltSplit==9&&fltTint==25&&fltOp==70&&fltInv==1&&(fltTintC&0xFFFFFF)==0xaabbcc);

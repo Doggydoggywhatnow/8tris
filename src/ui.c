@@ -15,7 +15,7 @@ static void pal_update(void){
   P.swirl=0;P.light=0;
   if(T(C_MENU)==TH_SWIRL){P.wild=0;P.swirl=1;P.bg=HEX(0x14081c);P.fg=HEX(0xfff4fb);P.ln=sw_col(.3+tm(NOW)*.00006);P.sep=sw_col(.8+tm(NOW)*.00006);}
   else if(T(C_MENU)==TH_WILD){P.wild=1;P.bg=HEX(0x14002a);P.fg=HEX(0xffffff);P.ln=HEX(0x00e5ff);P.sep=HEX(0xd500f9);}
-  else if(flat(C_MENU)){const Flat*f=flat(C_MENU);P.wild=0;P.bg=HEX(f->mbg);P.fg=HEX(f->mfg);P.ln=HEX(f->mln);P.sep=HEX(f->msep);}
+  else if(flat(C_MENU)){const Flat*f=flat(C_MENU);P.wild=0;P.light=f->light;P.bg=HEX(f->mbg);P.fg=HEX(f->mfg);P.ln=HEX(f->mln);P.sep=HEX(f->msep);}
   else if(T(C_MENU)==TH_GRAPHITE){P.wild=0;P.light=1;P.bg=HEX(0xffffff);P.fg=HEX(0x2e2e2e);P.ln=HEX(0x9a9a9a);P.sep=HEX(0xdcdcdc);}   // light grey lines, softer than 8tris Light
   else if(T(C_MENU)==TH_LIGHT){P.wild=0;P.light=1;P.bg=HEX(0xffffff);P.fg=HEX(0x101010);P.ln=HEX(0x101010);P.sep=HEX(0xc4c4c4);}
   else{P.wild=0;P.bg=HEX(0x000000);P.fg=HEX(0xe0e0e0);P.ln=HEX(0xe0e0e0);P.sep=HEX(0x444444);}
@@ -128,14 +128,21 @@ static void ui_fall(void){
     if(((int)(NOW/500))%2)fill_rect(bx+U(8)+text_w(0,U(14),b)+1,y+U(6),1,h-U(12),P.fg,1);}
   else{double r=rateOf(fallV);snprintf(b,16,r<10?"%.2f":r<100?"%.1f":"%.0f",r);text_mid(0,U(14),bx+U(8),y,h,P.fg,1,b);}
 }
+// Slider with its value shown in a box on the right: drag the slider, or click the box and type an exact number (Enter or a click elsewhere accepts it).
+static int sl_notype=0;   // set around sliders whose value is better typed another way (the colour picker has a hex box)
 static int ui_slider(const char*lab,int*v,int lo,int hi,const char*vt){
-  int y=cy,x=PX+PW-CWd(),w=CWd(),h=U(30);unsigned id=hid(lab,1);int rv=0;cy+=U(36);if(!vis(y,h))return 0;
-  label(y,lab);int tx=x+U(4),tw=w-U(74);
+  int y=cy,x=PX+PW-CWd(),w=CWd(),h=U(30);unsigned id=hid(lab,1),fid=hid(lab,6);int rv=0;cy+=U(36);if(!vis(y,h))return 0;
+  label(y,lab);int bw=U(72),bx=x+w-bw,tx=x+U(4),tw=w-bw-U(18);
   if(uhit(tx-U(6),y,tw+U(12),h))active_id=id;
   if(active_id==id&&mdown){int nv=lo+(int)floor((double)(mx-tx)/tw*(hi-lo)+.5);nv=iclamp(nv,lo,hi);if(nv!=*v){*v=nv;ui_changed=1;rv=1;}}
   fill_rect(tx,y+h/2,tw,2,P.fg,.5);double fr=hi>lo?(double)(*v-lo)/(hi-lo):0;
   fill_rect(tx,y+h/2,tw*fr,2,P.fg,1);fill_rect(tx+tw*fr-U(5),y+h/2-U(8),U(10),U(17),P.fg,1);
-  text_right(0,U(12),x+w,y+h/2+U(4),P.fg,1,vt);
+  if(sl_notype){text_right(0,U(12),x+w,y+h/2+U(4),P.fg,1,vt);return rv;}
+  if(uhit(bx,y,bw,h)&&focus_id!=fid){focus_commit();focus_id=fid;f_fresh=1;f_dptr=NULL;snprintf(fbuf,sizeof fbuf,"%d",*v);f_ptr=v;f_lo=lo;f_hi=hi;}
+  box(bx,y,bw,h,0);
+  if(focus_id==fid){char b[16];f_x=bx;f_y=y;f_w=bw;f_h=h;f_ptr=v;snprintf(b,16,"%s",fbuf);border_in(bx,y,bw,h,2,P.fg,1);if(f_fresh)fill_rect(bx+U(8),y+U(5),text_w(0,U(14),b),h-U(10),P.fg,.35);text_mid(0,U(14),bx+U(8),y,h,P.fg,1,b);
+    if(((int)(NOW/500))%2)fill_rect(bx+U(8)+text_w(0,U(14),b)+1,y+U(6),1,h-U(12),P.fg,1);}
+  else{double sz=U(13);while(sz>8&&text_w(0,sz,vt)>bw-U(12))sz--;text_mid(0,sz,bx+U(8),y,h,P.fg,1,vt);}
   return rv;
 }
 // Dropdown. The list itself is drawn last (select_popup) so it sits above everything.
@@ -342,7 +349,9 @@ static void settings_panel(double now){
   }
   // ---- Sound ----
   if(ui_head("Sound",&sec_open[3],now)){
-    int pv=(int)floor(snd_vol*100+.5);snprintf(b,sizeof b,pv?"%d%%":"Off",pv);
+    static int pv=-1,pvl=-1;   // static: a typed number is written into it between frames
+    {int cur=(int)floor(snd_vol*100+.5);if(pvl>=0&&pv!=pvl){snd_vol=pv/100.0;cur=pv;}pv=pvl=cur;}
+    snprintf(b,sizeof b,pv?"%d%%":"Off",pv);
     if(ui_slider("Sound effects",&pv,0,100,b))snd_vol=pv/100.0;
     ui_keys("The sound voice and which sounds play with effects are set in Theming.");
     ui_check("Combo song",&comboSong);
@@ -390,7 +399,9 @@ static void settings_panel(double now){
   }
   // ---- Appearance ----
   if(ui_head("Appearance",&sec_open[7],now)){
-    ui_keys("These change how the preferences menu looks and reads. They never change the board, the pieces or the text shown during play.");
+    ui_keys("These change how the preferences menu looks and reads. Apart from brightness, they never change the board, the pieces or the text shown during play.");
+    {char t[16];snprintf(t,sizeof t,"%d%%",gBright);ui_slider("Brightness (whole game)",&gBright,25,150,t);}
+    ui_keys("Brightness applies to everything on screen: the board, the side panel, the preferences menu and every overlay. 100% leaves the picture untouched.");
     {
      ui_select("Font",&uiFam,FONT_NAMES,7,127,0);}
     ui_keys("Atkinson Hyperlegible is designed for low vision, and OpenDyslexic for readers with dyslexia.");
@@ -410,7 +421,7 @@ static void settings_panel(double now){
     ui_sub("Preview");
     {int h=para(0,U(14),0,0,PW-U(16),LH,P.fg,1,"The quick brown fox jumps over the lazy dog. 0123456789",0)+U(12),y=cy+U(4);
      if(vis(y,h)){border_in(PX,y,PW,h,1,P.fg,1);para(0,U(14),PX+U(8),y+U(6),PW-U(16),LH,P.fg,1,"The quick brown fox jumps over the lazy dog. 0123456789",1);}cy+=h+U(12);}
-    if(btn_at(PX,cy,U(240),"Reset appearance to defaults")){uiFam=0;uiBold=0;uiItal=0;uiPt=14;hiCon=0;mwSel=0;lsSel=0;ghostStr=50;focus_commit();ui_changed=1;}
+    if(btn_at(PX,cy,U(240),"Reset appearance to defaults")){uiFam=0;uiBold=0;uiItal=0;uiPt=14;hiCon=0;mwSel=0;lsSel=0;ghostStr=50;gBright=100;focus_commit();ui_changed=1;}
     cy+=U(40);
   }
   // ---- Controls ----
@@ -570,11 +581,11 @@ static void pk_popup(double now){
      border_in(x0,yb,pw,hh,1,P.ln,1);double hx=x0+pk_h/360.0*(pw-1);fill_rect(hx-U(2),yb-U(2),U(4),hh+U(4),HEX(0xffffff),1);border_in(hx-U(2),yb-U(2),U(4),hh+U(4),1,HEX(0),1);}}
   if(changed){hsv2rgb(pk_h,pk_s,pk_v,&r,&g,&b);*pk_t=HEX(((u32)r<<16)|((u32)g<<8)|(u32)b);pk_rgb=*pk_t;ui_changed=1;}
   // exact red / green / blue, 256 steps each: 16.7 million colors
-  {int R=(*pk_t>>16)&255,G=(*pk_t>>8)&255,B=*pk_t&255,ch=0;char t[8];
+  {int R=(*pk_t>>16)&255,G=(*pk_t>>8)&255,B=*pk_t&255,ch=0;char t[8];sl_notype=1;
    snprintf(t,sizeof t,"%d",R);if(ui_slider("Red",&R,0,255,t))ch=1;
    snprintf(t,sizeof t,"%d",G);if(ui_slider("Green",&G,0,255,t))ch=1;
    snprintf(t,sizeof t,"%d",B);if(ui_slider("Blue",&B,0,255,t))ch=1;
-   if(ch){*pk_t=HEX(((u32)R<<16)|((u32)G<<8)|(u32)B);}}
+   sl_notype=0;if(ch){*pk_t=HEX(((u32)R<<16)|((u32)G<<8)|(u32)B);}}
   ui_color("Hex code",pk_t,"",0);
   {int y=cy,h=U(30);cy+=U(40);if(vis(y,h)){label(y,"New / previous");int w=CWd(),x=PX+PW-w;
      fill_rect(x,y,w/2,h,*pk_t,1);fill_rect(x+w/2,y,w-w/2,h,pk_orig,1);border_in(x,y,w,h,1,P.fg,.8);}}
