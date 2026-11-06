@@ -15,6 +15,7 @@ static void pal_update(void){
   P.swirl=0;P.light=0;
   if(T(C_MENU)==TH_SWIRL){P.wild=0;P.swirl=1;P.bg=HEX(0x14081c);P.fg=HEX(0xfff4fb);P.ln=sw_col(.3+tm(NOW)*.00006);P.sep=sw_col(.8+tm(NOW)*.00006);}
   else if(T(C_MENU)==TH_WILD){P.wild=1;P.bg=HEX(0x14002a);P.fg=HEX(0xffffff);P.ln=HEX(0x00e5ff);P.sep=HEX(0xd500f9);}
+  else if(flat(C_MENU)){const Flat*f=flat(C_MENU);P.wild=0;P.bg=HEX(f->mbg);P.fg=HEX(f->mfg);P.ln=HEX(f->mln);P.sep=HEX(f->msep);}
   else if(T(C_MENU)==TH_GRAPHITE){P.wild=0;P.light=1;P.bg=HEX(0xffffff);P.fg=HEX(0x2e2e2e);P.ln=HEX(0x9a9a9a);P.sep=HEX(0xdcdcdc);}   // light grey lines, softer than 8tris Light
   else if(T(C_MENU)==TH_LIGHT){P.wild=0;P.light=1;P.bg=HEX(0xffffff);P.fg=HEX(0x101010);P.ln=HEX(0x101010);P.sep=HEX(0xc4c4c4);}
   else{P.wild=0;P.bg=HEX(0x000000);P.fg=HEX(0xe0e0e0);P.ln=HEX(0xe0e0e0);P.sep=HEX(0x444444);}

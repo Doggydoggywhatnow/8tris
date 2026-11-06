@@ -47,19 +47,20 @@ static void draw_strip(double now){
   }else if(T(C_PANEL)==TH_WILD){
     for(i=0;i<WH;i++){double k=(double)i/WH;fill_rect(sx,i,80,1,RGB((int)(30*(1-k)),(int)(25*k),(int)(60)),.92);}
     fill_rect(sx,0,3,WH,hsl(tm(now)/10,1,.6),1);
-  }else if(pale(C_PANEL)){fill_rect(sx,0,80,WH,HEX(0xffffff),1);fill_rect(sx,0,1,WH,LG(C_PANEL)?HEX(0xd6d6d6):HEX(0),1);}
+  }else if(flat(C_PANEL)){fill_rect(sx,0,80,WH,HEX(flat(C_PANEL)->panel),1);fill_rect(sx,0,1,WH,HEX(flat(C_PANEL)->line),1);}
+  else if(pale(C_PANEL)){fill_rect(sx,0,80,WH,HEX(0xffffff),1);fill_rect(sx,0,1,WH,LG(C_PANEL)?HEX(0xd6d6d6):HEX(0),1);}
   else fill_rect(sx,0,80,WH,HEX(0),1);
   int y=8;
   for(i=0;i<slots;i++){
     if(y+64>WH-60)break;
-    if(slots>1&&i==sel)border_in(sx,y,80,64,2,LG(C_PANEL)?HEX(0x8f8f8f):LT(C_PANEL)?HEX(0):HEX(0xe0e0e0),.8);
+    if(slots>1&&i==sel)border_in(sx,y,80,64,2,flat(C_PANEL)?HEX(flat(C_PANEL)->btn):LG(C_PANEL)?HEX(0x8f8f8f):LT(C_PANEL)?HEX(0):HEX(0xe0e0e0),.8);
     if(holds[i])draw_small(holds[i],sx,y,canHold?1:.4,now);y+=64;
   }
-  if(T(C_PANEL)==TH_SWIRL){int xx;for(xx=8;xx<76;xx++)aa_px(sx+xx,y+sin(xx/7.0+tm(now)*.002)*2,sw_col(xx/80.0+tm(now)*.0001),.9);}else fill_rect(sx,y,80,1,T(C_PANEL)==TH_WILD?HEX(0x00e5ff):LG(C_PANEL)?HEX(0xd0d0d0):LT(C_PANEL)?HEX(0x999999):HEX(0x777777),1);y+=16;
+  if(T(C_PANEL)==TH_SWIRL){int xx;for(xx=8;xx<76;xx++)aa_px(sx+xx,y+sin(xx/7.0+tm(now)*.002)*2,sw_col(xx/80.0+tm(now)*.0001),.9);}else fill_rect(sx,y,80,1,flat(C_PANEL)?HEX(flat(C_PANEL)->line):T(C_PANEL)==TH_WILD?HEX(0x00e5ff):LG(C_PANEL)?HEX(0xd0d0d0):LT(C_PANEL)?HEX(0x999999):HEX(0x777777),1);y+=16;
   for(i=0;i<NQ&&i<nq;i++){if(y+64>WH-48)break;draw_small(queue[i],sx,y,1,now);y+=64;}
   int bx,by,bw,bh;strip_button_rect(&bx,&by,&bw,&bh);int hot=!menu&&mx>=bx&&mx<bx+bw&&my>=by&&my<by+bh;
-  u32 bc=T(C_PANEL)==TH_SWIRL?sw_col(.15+tm(now)*.00005):T(C_PANEL)==TH_WILD?HEX(0xffee00):LG(C_PANEL)?HEX(0x5a5a5a):LT(C_PANEL)?HEX(0):HEX(0xe0e0e0);
-  u32 bk=pale(C_PANEL)?HEX(0xffffff):HEX(0);
+  u32 bc=flat(C_PANEL)?HEX(flat(C_PANEL)->btn):T(C_PANEL)==TH_SWIRL?sw_col(.15+tm(now)*.00005):T(C_PANEL)==TH_WILD?HEX(0xffee00):LG(C_PANEL)?HEX(0x5a5a5a):LT(C_PANEL)?HEX(0):HEX(0xe0e0e0);
+  u32 bk=pale(C_PANEL)?HEX(0xffffff):flat(C_PANEL)?HEX(flat(C_PANEL)->panel):HEX(0);
   fill_rect(bx,by,bw,bh,hot?bc:bk,1);border_in(bx,by,bw,bh,1,bc,1);text_center(0,11,bx+bw/2.0,by+19,hot?bk:(T(C_PANEL)==TH_SWIRL?HEX(0xffffff):bc),1,"Preferences");
 }
 
@@ -214,7 +215,7 @@ void app_frame(double now,u32*fb){
   game_step(dt);
   if(board)refill();   // the "next pieces shown" count can change at any time
   if(T(C_PAGE)==TH_SWIRL){swirl_fill(0,0,0,WW,WH,6,tm(now),.9,50);swirl_loops(WW,WH,tm(now));}
-  else if(T(C_PAGE)==TH_WILD)wild_page(now);else fill_rect(0,0,WW,WH,pale(C_PAGE)?HEX(0xffffff):HEX(0),1);
+  else if(T(C_PAGE)==TH_WILD)wild_page(now);else fill_rect(0,0,WW,WH,pale(C_PAGE)?HEX(0xffffff):flat(C_PAGE)?HEX(flat(C_PAGE)->page):HEX(0),1);
   // board layout inside the stage (everything left of the strip)
   int stW=stripX();S=imax(1,imin((stW-16)/W,(WH-16)/H));
   fx_shake(now);

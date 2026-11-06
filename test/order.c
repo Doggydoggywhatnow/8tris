@@ -12,8 +12,8 @@ int main(void){fb=calloc(w*h,4);remove("/tmp/8tris-test-pref/settings.txt");app_
  {int y,ok=0;double mz=UZ*(1.25*uiPt/14.0);int ih=(int)(26*mz);
   for(y=DY+(int)(60*mz);y<DY+DHH&&!ok;y+=4){click(PX+PW-CWd()/2,y);
     if(sel_open&&sel_n==N_THEMES&&!strcmp(sel_names[1],"8tris Light")){ok=y;ppm("/tmp/8tris-test-pref/ord2.ppm",fb,w,h);
-      click(sel_x+10,sel_py+5*ih+ih/2);run(3);printf("page=%d (want %d swirl)\n",TC[C_PAGE],TH_SWIRL);
-      click(PX+PW-CWd()/2,y);run(2);click(sel_x+10,sel_py+2*ih+ih/2);run(3);printf("page=%d (want %d graphite)\n",TC[C_PAGE],TH_GRAPHITE);}
+      {int q;for(q=0;q<N_THEMES;q++)if(THEME_ORDER[q]==TH_SWIRL)break;click(sel_x+10,sel_py+q*ih+ih/2);}run(3);printf("page=%d (want %d swirl)\n",TC[C_PAGE],TH_SWIRL);
+      click(PX+PW-CWd()/2,y);run(2);{int q;for(q=0;q<N_THEMES;q++)if(THEME_ORDER[q]==TH_GRAPHITE)break;click(sel_x+10,sel_py+q*ih+ih/2);}run(3);printf("page=%d (want %d graphite)\n",TC[C_PAGE],TH_GRAPHITE);}
     else if(sel_open)click(5,5);}
   if(!ok)printf("FAIL: page background dropdown not found\n");}
  int i;for(i=0;i<N_THEMES;i++)printf("%s ",THEME_NAME[THEME_ORDER[i]]);printf("\n");return 0;}

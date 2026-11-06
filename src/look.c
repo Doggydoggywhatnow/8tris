@@ -1,13 +1,14 @@
 // ===== THEMES, BOARD DRAWING AND EFFECTS =====
 // Theming: every visual part is its own component and each component can use any theme that defines it.
 enum{C_PAGE,C_PANEL,C_MENU,C_FRAME,C_BOARD,C_GRID,C_PIECES,C_GHOST,C_EFFECTS,C_SOUND,N_COMPS};
-enum{TH_MIN,TH_CLASSIC,TH_WILD,TH_SWIRL,TH_SOLID,TH_LIGHT,TH_GRAPHITE,N_THEMES};
+enum{TH_MIN,TH_CLASSIC,TH_WILD,TH_SWIRL,TH_SOLID,TH_LIGHT,TH_GRAPHITE,TH_DARK,TH_CHOC,N_THEMES};
 static const char*COMP_NAME[N_COMPS]={"Page background","Side panel","Preferences menu","Board frame","Board background","Grid lines","Pieces","Landing outline","Effect colors","Sound voice"};
-static const char*THEME_NAME[N_THEMES]={"8tris","Classic","Wild","Swirl","Solid Color","8tris Light","Graphite"};
+static const char*THEME_NAME[N_THEMES]={"8tris","Classic","Wild","Swirl","Solid Color","8tris Light","Graphite","8tris Dark","Chocolate"};
 // The order themes are listed in the menus. Theme numbers never change (they are saved in preferences and pick sound voices), only this list does.
-static const int THEME_ORDER[N_THEMES]={TH_MIN,TH_LIGHT,TH_GRAPHITE,TH_CLASSIC,TH_SOLID,TH_SWIRL,TH_WILD};
-// Which themes define each component (bit 0 = 8tris, bit 1 = Classic, bit 2 = Wild, bit 3 = Swirl, bit 4 = Solid Color, bit 5 = 8tris Light, bit 6 = Graphite). Add a theme to a component by setting its bit.
-static const int AVAIL[N_COMPS]={109,109,109,109,109,109,127,125,111,111};   // Graphite (bit 6) is available for every component
+static const int THEME_ORDER[N_THEMES]={TH_MIN,TH_LIGHT,TH_DARK,TH_GRAPHITE,TH_CHOC,TH_CLASSIC,TH_SOLID,TH_SWIRL,TH_WILD};
+// Which themes define each component (bit 0 = 8tris, bit 1 = Classic, bit 2 = Wild, bit 3 = Swirl, bit 4 = Solid Color, bit 5 = 8tris Light, bit 6 = Graphite,
+// bit 7 = 8tris Dark, bit 8 = Chocolate). Add a theme to a component by setting its bit. Graphite, 8tris Dark and Chocolate cover every component.
+static const int AVAIL[N_COMPS]={109|384,109|384,109|384,109|384,109|384,109|384,127|384,125|384,111|384,111|384};
 // Solid Color theme: one hex color for the pieces and one for the landing outline. They stay equal unless solidSep is on.
 static u32 solidP=0xFF4F9DFFu,solidG=0xFF4F9DFFu;static int solidSep=0;
 // Appearance (preferences menu only, plus the landing outline strength): font family, bold, italic, text size in pt, high contrast, menu width, line spacing.
@@ -18,18 +19,25 @@ static int T(int c){return themeOn?TC[c]:TH_MIN;}
 static int LT(int c){return T(c)==TH_LIGHT;}                  // 8tris Light: the 8tris look with black and white swapped
 static int LG(int c){return T(c)==TH_GRAPHITE;}               // Graphite: 8tris with light grey pieces on a white board
 static int pale(int c){return LT(c)||LG(c);}                    // the component is drawn on a white/pale background
-static int snd_theme(void){int t=T(C_SOUND);return(t==TH_LIGHT||t==TH_GRAPHITE)?TH_MIN:t;}   // 8tris Light has no voice of its own, it uses the 8tris one
+static int snd_theme(void){int t=T(C_SOUND);return(t==TH_LIGHT||t==TH_GRAPHITE||t==TH_DARK||t==TH_CHOC)?TH_MIN:t;}   // these use the 8tris voice   // 8tris Light has no voice of its own, it uses the 8tris one
 static const char* theme_label(int comp,int t){if(comp==C_SOUND&&t==TH_CLASSIC)return "Classic chiptune";return (t>=0&&t<N_THEMES)?THEME_NAME[t]:"?";}
 static double tm(double now){return calm?0:now;}
 
+// Flat themes: one fixed palette per theme, used for every component. 8tris Dark is the 8tris look turned down: black, with dark
+// grey blocks and a faint grid. Chocolate is dark brown with light (milk chocolate) brown pieces and cream text.
+typedef struct{u32 page,panel,line,btn,frame,board,grid,piece,edge,ghost,text,spark,flash,mbg,mfg,mln,msep;}Flat;
+static const Flat FLAT_DARK={0x000000,0x000000,0x262626,0x6e6e6e,0x333333,0x000000,0x161616,0x3a3a3a,0x4e4e4e,0x404040,0x9a9a9a,0x5a5a5a,0x5a5a5a,0x000000,0xa8a8a8,0x5c5c5c,0x262626};
+static const Flat FLAT_CHOC={0x1e120c,0x170d08,0x3d281c,0xc9a27c,0x7a5638,0x26170f,0x352218,0xc49a6c,0xa67c52,0xa67c52,0xecdcc8,0xd9a066,0xf0e0cc,0x1e120c,0xecdcc8,0xa67c52,0x3d281c};
+static const Flat* flat(int c){int t=T(c);return t==TH_DARK?&FLAT_DARK:t==TH_CHOC?&FLAT_CHOC:NULL;}
 // Layout (set each frame by app_frame)
 static int S=28,BX=0,BY=0,SHX=0,SHY=0;   // cell size, board origin, current screen-shake offset
 
 // ---- Pieces: paint a single block at pixel position (x, y), size s ----
-static u32 piece_base(int ci,double now){int t=T(C_PIECES);if(t==TH_GRAPHITE)return HEX(0xb8b8b8);if(t==TH_LIGHT)return HEX(0x000000);if(t==TH_SOLID)return solidP;if(t==TH_SWIRL)return sw_col(ci*.137+.5);if(t==TH_CLASSIC)return COL[ci];if(t==TH_WILD)return hsl(fmod(ci*47+tm(now)/14,360),1,.60);return HEX(0xbdbdbd);}
+static u32 piece_base(int ci,double now){int t=T(C_PIECES);{const Flat*f=flat(C_PIECES);if(f)return HEX(f->piece);}if(t==TH_GRAPHITE)return HEX(0xb8b8b8);if(t==TH_LIGHT)return HEX(0x000000);if(t==TH_SOLID)return solidP;if(t==TH_SWIRL)return sw_col(ci*.137+.5);if(t==TH_CLASSIC)return COL[ci];if(t==TH_WILD)return hsl(fmod(ci*47+tm(now)/14,360),1,.60);return HEX(0xbdbdbd);}
 static void piece_paint(double x,double y,double s,int ci,double now,int gx,int gy){
   int t=T(C_PIECES);
   if(t==TH_MIN){fill_rect(x,y,s,s,HEX(0xbdbdbd),1);return;}
+  {const Flat*f=flat(C_PIECES);if(f){fill_rect(x,y,s,s,HEX(f->piece),1);if(s>=6)border_in(x,y,s,s,s>=20?2:1,HEX(f->edge),1);return;}}
   if(t==TH_SOLID){fill_rect(x,y,s,s,solidP,1);return;}
   if(t==TH_LIGHT){fill_rect(x,y,s,s,HEX(0x000000),1);return;}
   if(t==TH_GRAPHITE){fill_rect(x,y,s,s,HEX(0xb8b8b8),1);return;}
@@ -47,13 +55,14 @@ static void piece_paint(double x,double y,double s,int ci,double now,int gx,int 
 static void ghost_paint(double x,double y,double s,int ci,double now,int gx,int gy){
   int t=T(C_GHOST);u32 c;double a;
   if(t==TH_SWIRL){double cx=x+s/2,cy=y+s/2;ring_aa(cx,cy,s*.42,s>8?2.8:1.4,sw_col(ci*.137+.5+(gx+gy)*.05+tm(now)*.0003),1);return;}
-  if(t==TH_GRAPHITE){c=HEX(0x8f8f8f);a=1;}else if(t==TH_SOLID){c=ghost_solid();a=1;}else if(t==TH_WILD){c=hsl(tm(now)/6+gx*20+gy*20,1,.65);a=.95;}else{c=piece_base(ci,now);a=dmin(1,.5*ghostStr/50.0);}
+  if(flat(C_GHOST)){c=HEX(flat(C_GHOST)->ghost);a=1;}else if(t==TH_GRAPHITE){c=HEX(0x8f8f8f);a=1;}else if(t==TH_SOLID){c=ghost_solid();a=1;}else if(t==TH_WILD){c=hsl(tm(now)/6+gx*20+gy*20,1,.65);a=.95;}else{c=piece_base(ci,now);a=dmin(1,.5*ghostStr/50.0);}
   if(s>8)border_in(x,y,s,s,2,c,a);else border_in(x+1,y+1,s-2,s-2,1,c,a);
 }
 // ---- Board background and grid lines ----
 static void board_bg(double w,double h,double now){
   if(T(C_BOARD)==TH_MIN){fill_rect(BX,BY,w,h,HEX(0),1);return;}
   if(pale(C_BOARD)){fill_rect(BX,BY,w,h,HEX(0xffffff),1);return;}
+  if(flat(C_BOARD)){fill_rect(BX,BY,w,h,HEX(flat(C_BOARD)->board),1);return;}
   if(T(C_BOARD)==TH_SWIRL){swirl_fill(2,BX,BY,w,h,6,tm(now)+9000,.2,50);return;}
   double t=tm(now)/30;u32 c0=hsl(t,.7,.13),c1=hsl(t+80,.7,.07),c2=hsl(t+160,.7,.14);
   int x,y,ix=(int)w,iy=(int)h;double den=w*w+h*h;
@@ -75,7 +84,7 @@ static void board_bg(double w,double h,double now){
 }
 static void grid_draw(double w,double h,double now){
   if(S<8)return;int X,Y;
-  if(T(C_GRID)==TH_MIN||pale(C_GRID)){u32 c=LG(C_GRID)?HEX(0xe2e2e2):LT(C_GRID)?HEX(0xdcdcdc):HEX(0x2b2b2b);for(X=1;X<W;X++)fill_rect(BX+X*S,BY,1,h,c,1);for(Y=1;Y<H;Y++)fill_rect(BX,BY+Y*S,w,1,c,1);}
+  if(T(C_GRID)==TH_MIN||pale(C_GRID)||flat(C_GRID)){u32 c=flat(C_GRID)?HEX(flat(C_GRID)->grid):LG(C_GRID)?HEX(0xe2e2e2):LT(C_GRID)?HEX(0xdcdcdc):HEX(0x2b2b2b);for(X=1;X<W;X++)fill_rect(BX+X*S,BY,1,h,c,1);for(Y=1;Y<H;Y++)fill_rect(BX,BY+Y*S,w,1,c,1);}
   else if(T(C_GRID)==TH_SWIRL){double t=tm(now);int yy,xx,ih=(int)h,iw=(int)w;   // lines that waver slightly
     for(X=1;X<W;X++){u32 c=sw_col(X/(double)W+t*.00008);double ph=X*.9+t*.0012,k=1/(S*1.1);
       for(yy=0;yy<ih;yy++)aa_px(BX+X*S+fsin(yy*k+ph)*S*.05,BY+yy,c,.2);}
@@ -114,6 +123,7 @@ static u32 look(int k,double now,int i){
   int t=T(C_EFFECTS);
   if(t==TH_GRAPHITE){if(k==K_FLASH||k==K_TINT)return HEX(0x404040);if(k==K_TEXT)return i>=4?(((int)(now/90))%2?HEX(0xffffff):HEX(0xd0d0d0)):HEX(0xffffff);return HEX(0x707070);}   // soft grey flashes and sparks on the white board
   if(t==TH_LIGHT){if(k==K_FLASH||k==K_TINT)return HEX(0);if(k==K_TEXT)return i>=4?(((int)(now/90))%2?HEX(0xffffff):HEX(0xcccccc)):HEX(0xffffff);return HEX(0x303030);}   // dark flashes and sparks on the white board, white text (it has a black outline)
+  {const Flat*f=flat(C_EFFECTS);if(f){if(k==K_FLASH||k==K_TINT)return HEX(f->flash);if(k==K_TEXT)return i>=4?(((int)(now/90))%2?HEX(f->text):HEX(f->spark)):HEX(f->text);return HEX(f->spark);}}
   if(k==K_FLASH)return HEX(0xffffff);
   if(t==TH_MIN){if(k==K_TEXT)return i>=4?(((int)(now/90))%2?HEX(0xffffff):HEX(0xbdbdbd)):HEX(0xe0e0e0);return(k==K_SPARK||k==K_GLOW)?HEX(0xe0e0e0):HEX(0xffffff);}
   if(t==TH_SWIRL){double q=tm(now)*.0006;if(k==K_TEXT)return i>=4?sw_col(q):mixc(sw_col(q*.5),HEX(0xffffff),.6);if(k==K_SPARK)return sw_col(i*.11+q);if(k==K_RING)return sw_col(q+i*.23);return sw_col(q*.7+i*.1);}
@@ -178,7 +188,7 @@ static void frame_draw(double w,double h,double now){
   }else{
     if(fxLevel>=4&&fxShown(now))glow_rect(BX,BY,w,h,dmin(10+FX.n*4,50),0,look(K_GLOW,now,0),.9);
     else if(pcLevel>=4&&now-PF.t<PFD[4])glow_rect(BX,BY,w,h,70,10,look(K_GLOW,now,0),.9);
-    if(LG(C_FRAME))border_out(BX,BY,w,h,1,HEX(0xb4b4b4),1);else if(LT(C_FRAME))border_out(BX,BY,w,h,2,HEX(0),1);else border_out(BX,BY,w,h,1,HEX(0x555555),1);
+    if(flat(C_FRAME))border_out(BX,BY,w,h,1,HEX(flat(C_FRAME)->frame),1);else if(LG(C_FRAME))border_out(BX,BY,w,h,1,HEX(0xb4b4b4),1);else if(LT(C_FRAME))border_out(BX,BY,w,h,2,HEX(0),1);else border_out(BX,BY,w,h,1,HEX(0x555555),1);
   }
 }
 static void spark_px(double x,double y,double ps,u32 c,double al){if(T(C_EFFECTS)==TH_SWIRL)disc(x+ps/2,y+ps/2,ps*.75,c,al);else fill_rect(x,y,ps,ps,c,al);}
@@ -239,12 +249,13 @@ static void draw_board(double now){
 }
 static void draw_cover(int preview){
   if(!(paused||over)||preview)return;double w=W*S,h=H*S;char buf[96];
-  clip(BX,BY,BX+(int)w,BY+(int)h);fill_rect(BX,BY,w,h,pale(C_BOARD)?HEX(0xffffff):HEX(0),.8);
+  clip(BX,BY,BX+(int)w,BY+(int)h);fill_rect(BX,BY,w,h,pale(C_BOARD)?HEX(0xffffff):flat(C_BOARD)?HEX(flat(C_BOARD)->board):HEX(0),.8);
+  u32 ct=pale(C_BOARD)?HEX(0x101010):flat(C_BOARD)?HEX(flat(C_BOARD)==&FLAT_CHOC?FLAT_CHOC.text:0xb0b0b0):HEX(0xe0e0e0);
   double fs=dmax(12,dmin(32,w/7));
-  text_center(0,fs,BX+w/2,BY+h/2,pale(C_BOARD)?HEX(0x101010):HEX(0xe0e0e0),1,over?"Game over":"Paused");
+  text_center(0,fs,BX+w/2,BY+h/2,ct,1,over?"Game over":"Paused");
   if(over){if(clearOn)snprintf(buf,sizeof buf,"Score %d. Press %s.",(int)floor(score),key_label(bind_key(A_RESTART,0)));else snprintf(buf,sizeof buf,"Press %s to restart.",key_label(bind_key(A_RESTART,0)));}
   else snprintf(buf,sizeof buf,"Press %s to resume",key_label(bind_key(A_PAUSE,0)));
-  text_center(0,fs*.55,BX+w/2,BY+h/2+fs,pale(C_BOARD)?HEX(0x101010):HEX(0xe0e0e0),1,buf);
+  text_center(0,fs*.55,BX+w/2,BY+h/2+fs,ct,1,buf);
   unclip();
 }
 // A piece drawn small inside an 80x64 cell of the side panel (used for next and held pieces).
