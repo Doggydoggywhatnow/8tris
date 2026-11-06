@@ -2,6 +2,12 @@
 
 Versions are `major.minor.patch`. Until about ten changes have built up, new features are shipped as patch releases, so a patch number here can include features. This file is the real record of what changed.
 
+## 0.7.14
+- **Music folders.** The music player now scans the folders inside the music folder too (up to four levels deep, hidden folders and links are skipped), listing tracks as "Album/Track.mp3". A new **Folder** choice in Preferences, Sound, Music picks "All folders" or one folder: Play all in order and Play all shuffled then play only that folder (its subfolders included), and the Track list shows only that folder's tracks. The choice is saved, and falls back to all folders if the folder is gone.
+- Long dropdown lists (such as a big Track list) now scroll with the mouse wheel instead of running off the screen. The track limit is 100 files.
+- Saved music choices may point into folders, but never out of the music folder.
+- Tests: folder scanning, depth limit, links, folder filtering and the saved-path safety checks.
+
 ## 0.7.13
 - **Simpler preferences.** Settings that come with several options now sit in collapsible groups, closed until you open them: Game timer, Real-time clock, Stacking, Music, Show track on screen, Board position, Menu text and Menu layout. A group's box turns the feature on or off; ticking it also opens the group. Options inside a group use short names (Position, Size, Opacity, Font, Bold).
 - **One button style everywhere.** Every button now has the same height and padding, is as wide as its label, and sits on its own line at the left. Buttons that open a popup end in "...". The buttons that used to sit in the right-hand column (Reset to 10 x 20, Smaller and Larger, the key bindings Reset) moved onto their own lines; the key bindings one is now "Reset key bindings", under the list. Popup footers (Done, Revert, Close, Reset all to equal) and the Apply and restart and Resume buttons follow the same rule.

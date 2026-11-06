@@ -176,7 +176,7 @@ static int ui_slider(const char*lab,int*v,int lo,int hi,const char*vt){
   return rv;
 }
 // Dropdown. The list itself is drawn last (select_popup) so it sits above everything.
-static unsigned sel_id;static int sel_x,sel_y,sel_w,sel_n,sel_mask,sel_base,sel_py,*sel_ptr;static const char*const*sel_names;
+static unsigned sel_id;static int sel_x,sel_y,sel_w,sel_n,sel_mask,sel_base,sel_py,sel_vis,sel_off,*sel_ptr;static const char*const*sel_names;
 static void ui_select(const char*lab,int*v,const char*const*names,int n,int mask,int base){
   int y=cy,x=PX+PW-CWd(),w=CWd(),h=U(30);unsigned id=hid(lab,2);cy+=U(36);if(!vis(y,h))return;
   label(y,lab);int hot=uhov(x,y,w,h);box(x,y,w,h,0);(void)hot;
@@ -184,17 +184,20 @@ static void ui_select(const char*lab,int*v,const char*const*names,int n,int mask
   double sz=U(14);while(sz>8&&text_w(0,sz,cur)>w-U(30))sz--;
   text_mid(0,sz,x+U(8),y,h,P.fg,1,cur);text_right(0,U(10),x+w-U(8),y+U(19),P.fg,.7,"\xE2\x96\xBC");
   if(uhit(x,y,w,h)){sel_open=1;sel_id=id;sel_x=x;sel_y=y;sel_w=w;sel_n=n;sel_mask=mask;sel_base=base;sel_ptr=v;sel_names=names;
-    int ph=n*U(26);sel_py=(y+h+ph<=FH-U(4))?y+h:imax(U(4),y-ph);}
+    sel_vis=imin(n,imax(3,(FH-U(8))/U(26)));sel_off=0;if(*v+base>=sel_vis)sel_off=imin(*v+base-sel_vis/2,n-sel_vis);if(sel_off<0)sel_off=0;   /* long lists scroll with the wheel */
+    int ph=sel_vis*U(26);sel_py=(y+h+ph<=FH-U(4))?y+h:imax(U(4),y-ph);}
 }
 static void select_popup(void){
-  if(!sel_open)return;int i,ih=U(26);fill_rect(sel_x,sel_py,sel_w,sel_n*ih,P.bg,1);border_in(sel_x,sel_py,sel_w,sel_n*ih,1,P.ln,1);
-  for(i=0;i<sel_n;i++){int y=sel_py+i*ih,ok=(sel_mask>>i)&1,cur=(*sel_ptr+sel_base)==i,h=mx>=sel_x&&mx<sel_x+sel_w&&my>=y&&my<y+ih&&ok;
+  if(!sel_open)return;int j,ih=U(26);
+  if(wheel_acc!=0&&sel_n>sel_vis){sel_off=iclamp(sel_off-(int)(wheel_acc*3),0,sel_n-sel_vis);}
+  fill_rect(sel_x,sel_py,sel_w,sel_vis*ih,P.bg,1);border_in(sel_x,sel_py,sel_w,sel_vis*ih,1,P.ln,1);
+  for(j=0;j<sel_vis;j++){int i=sel_off+j,y=sel_py+j*ih,ok=(sel_mask>>i)&1,cur=(*sel_ptr+sel_base)==i,h=mx>=sel_x&&mx<sel_x+sel_w&&my>=y&&my<y+ih&&ok;
     if(h)fill_rect(sel_x+1,y,sel_w-2,ih,P.fg,1);else if(cur)fill_rect(sel_x+1,y,sel_w-2,ih,P.fg,.18);
     text_mid(0,U(14),sel_x+U(8),y,ih,h?P.bg:P.fg,ok?1:.35,sel_names[i]);}
 }
 static void select_click(void){ // called first thing each frame when a click happens while a dropdown is open
   if(!sel_open||!mclicked)return;int ih=U(26);
-  if(clx>=sel_x&&clx<sel_x+sel_w&&cly>=sel_py&&cly<sel_py+sel_n*ih){int i=(cly-sel_py)/ih;if((sel_mask>>i)&1){*sel_ptr=i-sel_base;ui_changed=1;}}
+  if(clx>=sel_x&&clx<sel_x+sel_w&&cly>=sel_py&&cly<sel_py+sel_vis*ih){int i=(cly-sel_py)/ih+sel_off;if((sel_mask>>i)&1){*sel_ptr=i-sel_base;ui_changed=1;}}
   sel_open=0;mclicked=0;
 }
 
@@ -387,7 +390,12 @@ static void settings_panel(double now){
      if(ui_group("Music",NULL,G_MUSIC)){
        ui_select("Music",&musMode,MM,4,15,0);
        if(musMode){
-         if(musMode==1&&nmfiles){static const char*nm[MUS_MAXFILES];int k;for(k=0;k<nmfiles;k++)nm[k]=mfiles[k];static int tsel=0,tselv=0;if(tsel!=tselv&&tsel>=0&&tsel<nmfiles){musSel=tsel;snprintf(musFile,sizeof musFile,"%s",mfiles[tsel]);}tsel=tselv=musSel;ui_select("Track",&tsel,nm,nmfiles,-1,0);}   /* static: the dropdown writes here after this function returns */
+         if(nfold>0){static const char*fn[MUS_MAXFILES+1];static int fsel=0,fselv=0;int k;fn[0]="All folders";for(k=0;k<nfold;k++)fn[k+1]=mfold[k];
+           if(fsel!=fselv){if(fsel<=0)musFold[0]=0;else if(fsel<=nfold)snprintf(musFold,sizeof musFold,"%s",mfold[fsel-1]);}
+           fsel=0;for(k=0;k<nfold;k++)if(!strcmp(mfold[k],musFold))fsel=k+1;fselv=fsel;ui_select("Folder",&fsel,fn,nfold+1,-1,0);}   /* static: the dropdown writes here after this function returns */
+         if(musMode==1&&nmfiles){static const char*nm[MUS_MAXFILES];static int ix[MUS_MAXFILES];int k,m=0;for(k=0;k<nmfiles;k++)if(music_in_scope(k)){nm[m]=mfiles[k];ix[m++]=k;}
+           static int tsel=0,tselv=0,tm=0;if(tsel!=tselv&&tsel>=0&&tsel<tm){musSel=ix[tsel];snprintf(musFile,sizeof musFile,"%s",mfiles[musSel]);}
+           tsel=0;for(k=0;k<m;k++)if(ix[k]==musSel)tsel=k;tselv=tsel;tm=m;if(m)ui_select("Track",&tsel,nm,m,-1,0);}   /* static: the dropdown writes here after this function returns */
          snprintf(b,sizeof b,musVol?"%d%%":"Off",musVol);ui_slider("Volume",&musVol,0,100,b);
          if(mus_status[0])ui_keys(mus_status);
        }

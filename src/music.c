@@ -145,11 +145,13 @@ static void meta_read(const char*path,Meta*m){
 
 
 #define MUS_MAXMIN 10        // longest track accepted, in minutes (it is held in memory: about 10 MB per minute)
-#define MUS_MAXFILES 30
+#define MUS_MAXFILES 100
 static int musMode=0,musVol=50;                 // 0 off, 1 repeat one track, 2 all in order, 3 all shuffled; volume %
 static char musFile[256];                       // the track chosen for "repeat one" (saved by file name)
+static char musFold[256];                       // "" = every track; otherwise only tracks inside this folder (and its folders) are played
+static char mfold[MUS_MAXFILES][256];static int nfold=0;
 static char mfiles[MUS_MAXFILES][256];static int nmfiles=0,musSel=0,musCur=-1;
-static char mus_status[200]="";static int mus_failed=0,mus_tries=0,mus_prevMode=0,mus_prevSel=-1;
+static char mus_status[200]="";static int mus_failed=0,mus_tries=0,mus_prevMode=0,mus_prevSel=-1;static char mus_prevFold[256];
 // Audio thread side: the loaded track. Changed only under plat_lock.
 static int16_t*mus_buf=NULL;static i64 mus_len=0,mus_pos=0;static int mus_ended=0;
 // Loader side: a worker thread fills job_* and then sets mus_job to 2.
@@ -160,18 +162,37 @@ static const char* music_dir(void){static char d[700];snprintf(d,sizeof d,"%smus
 static int music_ext_ok(const char*n){{const unsigned char*q=(const unsigned char*)n;for(;*q;q++)if(*q<32||*q==127)return 0;}   // no control characters in names
   const char*e=strrchr(n,'.');if(!e)return 0;char x[8];int i;for(i=0;e[i+1]&&i<6;i++)x[i]=(char)tolower((unsigned char)e[i+1]);x[i]=0;if(e[i+1])return 0;return !strcmp(x,"mp3")||!strcmp(x,"ogg")||!strcmp(x,"wav")||!strcmp(x,"flac");}
 static int music_cmp(const void*a,const void*b){const char*x=(const char*)a,*y=(const char*)b;for(;*x&&*y;x++,y++){int d=tolower((unsigned char)*x)-tolower((unsigned char)*y);if(d)return d;}return tolower((unsigned char)*x)-tolower((unsigned char)*y);}
+// Lists the music folder and the folders inside it (names are kept as "Folder/Track.mp3"; never follows links, so it cannot loop or leave the folder).
+#define MUS_DEPTH 4
+static void music_walk(const char*rel,int depth){
+  char full[800],child[300];snprintf(full,sizeof full,"%s%s%s",music_dir(),rel[0]?"/":"",rel);
+#ifdef _WIN32
+  {char pat[820];snprintf(pat,sizeof pat,"%s\\*",full);WIN32_FIND_DATAA fd;HANDLE h=FindFirstFileA(pat,&fd);
+   if(h!=INVALID_HANDLE_VALUE){do{const char*n=fd.cFileName;if(n[0]=='.'||nmfiles>=MUS_MAXFILES)continue;
+     if(strlen(n)+strlen(rel)+2>=255)continue;snprintf(child,sizeof child,"%s%s%s",rel,rel[0]?"/":"",n);
+     if(fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY){if(depth<MUS_DEPTH&&!(fd.dwFileAttributes&FILE_ATTRIBUTE_REPARSE_POINT))music_walk(child,depth+1);}
+     else if(music_ext_ok(n))snprintf(mfiles[nmfiles++],256,"%s",child);}while(FindNextFileA(h,&fd));FindClose(h);}}
+#else
+  {DIR*d=opendir(full);struct dirent*e;if(d){while((e=readdir(d))&&nmfiles<MUS_MAXFILES){const char*n=e->d_name;if(n[0]=='.'||strlen(n)+strlen(rel)+2>=255)continue;
+     snprintf(child,sizeof child,"%s%s%s",rel,rel[0]?"/":"",n);int isdir=0;
+     if(e->d_type==DT_DIR)isdir=1;else if(e->d_type==DT_UNKNOWN){char fp[1100];struct stat st;snprintf(fp,sizeof fp,"%s/%s",full,n);if(lstat(fp,&st)==0&&S_ISDIR(st.st_mode))isdir=1;}
+     if(isdir){if(depth<MUS_DEPTH)music_walk(child,depth+1);}
+     else if(music_ext_ok(n))snprintf(mfiles[nmfiles++],256,"%s",child);}closedir(d);}}
+#endif
+}
 // Lists the music folder (creating it if needed) and keeps the chosen track selected by name.
 static void music_scan(void){
-  nmfiles=0;const char*dir=music_dir();
+  nmfiles=0;
 #ifdef _WIN32
-  CreateDirectoryA(dir,NULL);
-  {char pat[720];snprintf(pat,sizeof pat,"%s\\*",dir);WIN32_FIND_DATAA fd;HANDLE h=FindFirstFileA(pat,&fd);
-   if(h!=INVALID_HANDLE_VALUE){do{if(!(fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)&&fd.cFileName[0]!='.'&&strlen(fd.cFileName)<255&&music_ext_ok(fd.cFileName)&&nmfiles<MUS_MAXFILES)snprintf(mfiles[nmfiles++],256,"%s",fd.cFileName);}while(FindNextFileA(h,&fd));FindClose(h);}}
+  CreateDirectoryA(music_dir(),NULL);
 #else
-  mkdir(dir,0700);
-  {DIR*d=opendir(dir);struct dirent*e;if(d){while((e=readdir(d))&&nmfiles<MUS_MAXFILES){if(e->d_name[0]=='.'||strlen(e->d_name)>=255||!music_ext_ok(e->d_name))continue;snprintf(mfiles[nmfiles++],256,"%s",e->d_name);}closedir(d);}}
+  mkdir(music_dir(),0700);
 #endif
+  music_walk("",0);
   qsort(mfiles,nmfiles,256,music_cmp);
+  {int i,j;nfold=0;for(i=0;i<nmfiles;i++){char t[256];snprintf(t,sizeof t,"%s",mfiles[i]);char*sl;while((sl=strrchr(t,'/'))){*sl=0;int have=0;for(j=0;j<nfold;j++)if(!strcmp(mfold[j],t)){have=1;break;}if(!have&&nfold<MUS_MAXFILES)snprintf(mfold[nfold++],256,"%s",t);}}
+   qsort(mfold,nfold,256,music_cmp);
+   {int ok=!musFold[0];for(j=0;j<nfold;j++)if(!strcmp(mfold[j],musFold))ok=1;if(!ok)musFold[0]=0;}}   // the chosen folder is gone: back to all
   {int i;musSel=0;for(i=0;i<nmfiles;i++)if(!strcmp(mfiles[i],musFile)){musSel=i;break;}if(nmfiles)snprintf(musFile,sizeof musFile,"%s",mfiles[musSel]);}
   mus_failed=0;mus_tries=0;
 }
@@ -215,6 +236,9 @@ static void music_start(int idx){
   snprintf(mus_status,sizeof mus_status,"Loading %s...",job_name);
   if(!plat_thread(music_job_fn,NULL))music_job_fn(NULL);   // no thread available: decode right here
 }
+// Is track i inside the chosen folder (or are all folders chosen)?
+static int music_in_scope(int i){if(!musFold[0])return 1;size_t L=strlen(musFold);return !strncmp(mfiles[i],musFold,L)&&mfiles[i][L]=='/';}
+static int music_scope_count(void){int i,n=0;for(i=0;i<nmfiles;i++)n+=music_in_scope(i);return n;}
 static void music_stop(void){
   int16_t*old;plat_lock();old=mus_buf;mus_buf=NULL;mus_len=0;mus_pos=0;mus_ended=0;plat_unlock();free(old);meta_free(&cur_meta);musCur=-1;
 }
@@ -234,24 +258,29 @@ static void music_tick(void){
   if(__atomic_load_n(&mus_job,__ATOMIC_ACQUIRE)==2){
     if(job_buf){int16_t*old;plat_lock();old=mus_buf;mus_buf=job_buf;mus_len=job_len;mus_pos=0;mus_ended=0;plat_unlock();free(old);job_buf=NULL;meta_free(&cur_meta);cur_meta=job_meta;memset(&job_meta,0,sizeof job_meta);
       musCur=job_idx;mus_tries=0;snprintf(mus_status,sizeof mus_status,"Playing %s",job_name);}
-    else{snprintf(mus_status,sizeof mus_status,"%s: %s",job_name,job_err);mus_tries++;if(musMode==1||mus_tries>=nmfiles)mus_failed=1;
+    else{snprintf(mus_status,sizeof mus_status,"%s: %s",job_name,job_err);mus_tries++;if(musMode==1||mus_tries>=music_scope_count())mus_failed=1;
       else musCur=job_idx;}                 /* in the "all" modes a bad file is skipped */
     mus_job=0;
   }
   if(mus_job==1)return;
+  if(strcmp(musFold,mus_prevFold)){snprintf(mus_prevFold,sizeof mus_prevFold,"%s",musFold);   // another folder was chosen
+    if(musMode==1&&nmfiles&&!music_in_scope(musSel)){int i;for(i=0;i<nmfiles;i++)if(music_in_scope(i)){musSel=i;snprintf(musFile,sizeof musFile,"%s",mfiles[i]);break;}}
+    if(musMode>1&&musCur>=0&&!music_in_scope(musCur)){music_stop();mus_failed=0;mus_tries=0;}}
   if(musMode!=mus_prevMode||(musMode==1&&musSel!=mus_prevSel)){   // the user changed the mode or track
     mus_prevMode=musMode;mus_prevSel=musSel;mus_failed=0;mus_tries=0;if(!musMode){music_stop();mus_status[0]=0;return;}
     if(musMode==1||mus_buf){music_stop();}
   }
   if(!musMode||mus_failed)return;
   if(!nmfiles){snprintf(mus_status,sizeof mus_status,"No music files found yet.");mus_failed=1;return;}
+  {int sc=music_scope_count();if(!sc){snprintf(mus_status,sizeof mus_status,"No music files in this folder.");mus_failed=1;return;}}
   {int need=!mus_buf||mus_ended;
    if(musMode==1&&mus_buf&&musCur!=musSel)need=1;
    if(!need)return;
    int idx;
    if(musMode==1)idx=musSel;
-   else if(musMode==2)idx=(musCur+1)%nmfiles;
-   else{idx=nmfiles>1?(int)(rnd()*nmfiles):0;if(nmfiles>1&&idx==musCur)idx=(idx+1)%nmfiles;}
+   else if(musMode==2){idx=musCur<0?-1:musCur;int k;for(k=0;k<nmfiles;k++){idx=(idx+1)%nmfiles;if(music_in_scope(idx))break;}}
+   else{int sc=music_scope_count(),pick=sc>1?(int)(rnd()*sc):0,k;if(sc>1&&musCur>=0&&music_in_scope(musCur)){int cpos=0;for(k=0;k<musCur;k++)cpos+=music_in_scope(k);if(pick==cpos)pick=(pick+1)%sc;}
+     idx=0;for(k=0;k<nmfiles;k++)if(music_in_scope(k)){if(!pick--){idx=k;break;}}}
    if(idx<0||idx>=nmfiles)idx=0;
    if(musMode!=1&&mus_ended)music_stop();
    music_start(idx);}

@@ -175,7 +175,7 @@ static void save_settings(void){
   if(store_off)return;
   char tmp[640],dst[600];snprintf(dst,sizeof dst,"%s",get_pref_path("settings.txt"));FILE*f=safe_open(dst,tmp,sizeof tmp);if(!f)return;int i;
   fprintf(f,"grid=%d,%d\nslots=%d\nfall=%g\nlvl=%d\nclear=%d\nsd=%d\nvol=%d\nthemeOn=%d\ncalm=%d\nfxm=%d\nadv=%d,%d,%d,%d\nsolid=%06x,%06x,%d\nui=%d,%d,%d,%d,%d,%d,%d,%d\n",W,H,slots,fallV,lvlSys,clearOn,sdRate,(int)floor(snd_vol*100+.5),themeOn,calm,fxMaster,ADV[0],ADV[1],ADV[2],ADV[3],(unsigned)(solidP&0xFFFFFF),(unsigned)(solidG&0xFFFFFF),solidSep,uiFam,uiBold,uiItal,uiPt,hiCon,mwSel,lsSel,ghostStr);
-  fprintf(f,"timerms=%d\nbright=%d\nres=%d\nfps=%d\nshowfps=%d\ncombosong=%d\nnowplay=%d,%d,%d,%d,%d,%d,%d,%d,%d\nmusic=%d,%d\nmusicfile=%s\nnext=%d\nprefbtn=%d\nboardpos=%d,%d\ntimer=%d,%d,%d,%d,%d,%d\nclock=%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\nstack=%d,%d\nfilters=%d,%d,%d,%d,%d,%d,%d,%d,%06x\n",timerMs,gBright,resSet,fpsSet,showFps,comboSong,NP.on,NP.pos,NP.sz,NP.op,NP.fam,NP.bold,npArt,npArtSz,npArtist,musMode,musVol,musFile,NQ,prefBtn,boardPX,boardPY,
+  fprintf(f,"timerms=%d\nbright=%d\nres=%d\nfps=%d\nshowfps=%d\ncombosong=%d\nnowplay=%d,%d,%d,%d,%d,%d,%d,%d,%d\nmusic=%d,%d\nmusicfile=%s\nmusicfolder=%s\nnext=%d\nprefbtn=%d\nboardpos=%d,%d\ntimer=%d,%d,%d,%d,%d,%d\nclock=%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\nstack=%d,%d\nfilters=%d,%d,%d,%d,%d,%d,%d,%d,%06x\n",timerMs,gBright,resSet,fpsSet,showFps,comboSong,NP.on,NP.pos,NP.sz,NP.op,NP.fam,NP.bold,npArt,npArtSz,npArtist,musMode,musVol,musFile,musFold,NQ,prefBtn,boardPX,boardPY,
     CLK[0].on,CLK[0].pos,CLK[0].sz,CLK[0].op,CLK[0].fam,CLK[0].bold,CLK[1].on,CLK[1].pos,CLK[1].sz,CLK[1].op,CLK[1].fam,CLK[1].bold,clkTzH,clkTzM,clkDst,clk24,clkSecs,stackV,stackFirst,
     fltBri,fltCon,fltSat,fltHue,fltSplit,fltTint,fltOp,fltInv,(unsigned)(fltTintC&0xFFFFFF));
   fprintf(f,"weights=");for(i=1;i<=11;i++)fprintf(f,"%d%s",weights[i],i<11?",":"\n");
@@ -213,7 +213,8 @@ static void load_settings(void){
     else if(!strcmp(k,"boardpos")){if(parse_ints(val,v,2)==2){boardPX=iclamp(v[0],0,100);boardPY=iclamp(v[1],0,100);}}
     else if(!strcmp(k,"nowplay")){if(parse_ints(val,v,9)==9){NP.on=v[0]?1:0;NP.pos=iclamp(v[1],0,5);NP.sz=iclamp(v[2],10,48);NP.op=iclamp(v[3],10,100);NP.fam=iclamp(v[4],0,6);NP.bold=v[5]?1:0;npArt=v[6]?1:0;npArtSz=iclamp(v[7],32,256);npArtist=v[8]?1:0;}}
     else if(!strcmp(k,"music")){if(parse_ints(val,v,2)==2){musMode=iclamp(v[0],0,3);musVol=iclamp(v[1],0,100);}}
-    else if(!strcmp(k,"musicfile")){size_t L_=strlen(val);while(L_&&(val[L_-1]=='\n'||val[L_-1]=='\r'))L_--;if(L_<sizeof musFile&&!memchr(val,'/',L_)&&!memchr(val,'\\',L_)){memcpy(musFile,val,L_);musFile[L_]=0;}}
+    else if(!strcmp(k,"musicfile")){size_t L_=strlen(val);while(L_&&(val[L_-1]=='\n'||val[L_-1]=='\r'))L_--;if(L_<sizeof musFile&&!memchr(val,'\\',L_)&&!memchr(val,':',L_)&&val[0]!='/'&&!(L_>=2&&val[0]=='.'&&val[1]=='.')&&!strstr(val,"/..")&&!strstr(val,"//")){memcpy(musFile,val,L_);musFile[L_]=0;}}
+    else if(!strcmp(k,"musicfolder")){size_t L_=strlen(val);while(L_&&(val[L_-1]=='\n'||val[L_-1]=='\r'))L_--;if(L_<sizeof musFold&&!memchr(val,'\\',L_)&&!memchr(val,':',L_)&&val[0]!='/'&&!(L_>=2&&val[0]=='.'&&val[1]=='.')&&!strstr(val,"/..")&&!strstr(val,"//")){memcpy(musFold,val,L_);musFold[L_]=0;}}
     else if(!strcmp(k,"next"))NQ=iclamp(atoi(val),0,10);
     else if(!strcmp(k,"prefbtn"))prefBtn=iclamp(atoi(val),0,6);
     else if(!strcmp(k,"timer")){if(parse_ints(val,v,6)==6)clk_set(0,v);}
