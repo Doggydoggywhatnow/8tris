@@ -1,13 +1,19 @@
 // ===== MUSIC FROM LOCAL FILES =====
 // Plays .mp3, .ogg, .wav and .flac files the user puts in the "music" folder next to the saved preferences. Files are read only from
 // this computer, streamed from the file by a background thread (any length; a few seconds are held at a time), and never copied, uploaded or tracked.
-// Decoders: dr_mp3, dr_flac, dr_wav (David Reid) and stb_vorbis (Sean Barrett), all public domain or MIT-0.
+// Decoders: Liberated Peep (assembly; WAV and FLAC, see third_party/peep) plays what it can; dr_mp3 and stb_vorbis play MP3 and Ogg; dr_flac and dr_wav
+// (David Reid) are the fallbacks for what Peep does not take: float WAV, 32-bit FLAC, RF64/W64, more than two channels in plain 16-bit WAV.
+// dr_* are public domain or MIT-0, stb_vorbis public domain, Peep public domain (Unlicense).
 #include <stdint.h>
 #include <ctype.h>
 #ifndef _WIN32
 #include <dirent.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <unistd.h>
 #endif
+#include "../third_party/peep/peep.h"
 #define DR_MP3_IMPLEMENTATION
 #define DR_FLAC_IMPLEMENTATION
 #define DR_WAV_IMPLEMENTATION
@@ -244,15 +250,84 @@ static int rs_run(Rs*r,const float*in,int nf,float*out,int cap){
   return o;
 }
 // The open track (decoder thread only).
-enum{ST_NONE,ST_MP3,ST_WAV,ST_FLAC,ST_OGG};
-static struct{int kind,ch;drmp3 m;drwav w;drflac*f;stb_vorbis*v;Rs rs;int tail;}ST;
+enum{ST_NONE,ST_MP3,ST_WAV,ST_FLAC,ST_OGG,ST_PEEP};
+// A file mapped read-only into memory: Liberated Peep decodes straight from memory, and mapping (instead of reading) keeps memory use flat for
+// very long files, because only the pages being played are loaded. On Linux the pages already played are handed back as playback moves on.
+typedef struct{const unsigned char*p;size_t n;
+#ifdef _WIN32
+  HANDLE hf,hm;
+#endif
+}Map;
+static int map_open(Map*m,const char*path){
+  memset(m,0,sizeof*m);
+#ifdef _WIN32
+  m->hf=CreateFileA(path,GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,NULL);if(m->hf==INVALID_HANDLE_VALUE){m->hf=NULL;return 0;}
+  {LARGE_INTEGER sz;if(!GetFileSizeEx(m->hf,&sz)||sz.QuadPart<=0||(unsigned long long)sz.QuadPart>(size_t)-1/2){CloseHandle(m->hf);m->hf=NULL;return 0;}m->n=(size_t)sz.QuadPart;}
+  m->hm=CreateFileMappingA(m->hf,NULL,PAGE_READONLY,0,0,NULL);if(!m->hm){CloseHandle(m->hf);m->hf=NULL;return 0;}
+  m->p=(const unsigned char*)MapViewOfFile(m->hm,FILE_MAP_READ,0,0,0);if(!m->p){CloseHandle(m->hm);CloseHandle(m->hf);m->hm=m->hf=NULL;return 0;}
+  return 1;
+#else
+  int fd=open(path,O_RDONLY);if(fd<0)return 0;struct stat st;
+  if(fstat(fd,&st)!=0||!S_ISREG(st.st_mode)||st.st_size<=0){close(fd);return 0;}
+  void*q=mmap(NULL,(size_t)st.st_size,PROT_READ,MAP_PRIVATE,fd,0);close(fd);if(q==MAP_FAILED)return 0;
+  m->p=(const unsigned char*)q;m->n=(size_t)st.st_size;madvise(q,m->n,MADV_SEQUENTIAL);return 1;
+#endif
+}
+static void map_close(Map*m){
+  if(!m->p)return;
+#ifdef _WIN32
+  UnmapViewOfFile(m->p);CloseHandle(m->hm);CloseHandle(m->hf);
+#else
+  munmap((void*)m->p,m->n);
+#endif
+  memset(m,0,sizeof*m);
+}
+// Gives back the pages before `upto` (they can be read again from the file if a seek goes back).
+static void map_release(Map*m,size_t upto){
+#ifndef _WIN32
+  long pg=sysconf(_SC_PAGESIZE);if(pg<=0||!m->p)return;upto&=~(size_t)(pg-1);if(upto>m->n)upto=m->n&~(size_t)(pg-1);if(upto)madvise((void*)m->p,upto,MADV_DONTNEED);
+#else
+  (void)m;(void)upto;
+#endif
+}
+static struct{int kind,ch;drmp3 m;drwav w;drflac*f;stb_vorbis*v;Rs rs;int tail;
+  peep pk;Map mp;void*work;const peep_codec*pc;unsigned long long fpos,rel;}ST;   // pk, mp, work, pc, fpos, rel: Liberated Peep's state
 static void st_close(void){
   if(ST.kind==ST_MP3)drmp3_uninit(&ST.m);else if(ST.kind==ST_WAV)drwav_uninit(&ST.w);else if(ST.kind==ST_FLAC)drflac_close(ST.f);else if(ST.kind==ST_OGG)stb_vorbis_close(ST.v);
+  else if(ST.kind==ST_PEEP){peep_close(&ST.pk);free(ST.work);ST.work=NULL;map_close(&ST.mp);ST.pc=NULL;}
   ST.kind=ST_NONE;ST.f=NULL;ST.v=NULL;}
+// Is this WAV file's sample format floating point? (Peep rounds float to 32-bit integers and stops at full scale; the float decoder keeps peaks above 1.0 for the limiter.)
+static int wav_is_float(const unsigned char*d,size_t n){
+  if(n<12||memcmp(d,"RIFF",4)||memcmp(d+8,"WAVE",4))return 0;
+  size_t pos=12;int k;
+  for(k=0;k<1000&&pos+8<=n;k++){unsigned cl=(unsigned)d[pos+4]|d[pos+5]<<8|d[pos+6]<<16|(unsigned)d[pos+7]<<24;
+    if(!memcmp(d+pos,"fmt ",4)){if(cl<16||pos+8+16>n)return 0;unsigned tag=d[pos+8]|d[pos+9]<<8;
+      if(tag==0xFFFE&&cl>=26&&pos+8+26<=n)tag=d[pos+8+24]|d[pos+8+25]<<8;   // extensible: the real format is the first two bytes of the sub-format
+      return tag==3;}
+    pos+=8+(size_t)cl+(cl&1);}
+  return 0;
+}
+// Tries Liberated Peep on a WAV or FLAC file. Returns 1 and fills ST on success; 0 means "use the other decoder" (nothing is left open).
+static int st_open_peep(const char*path,int is_wav,int*rate){
+  static const peep_codec*const codecs[]={&peep_codec_flac,&peep_codec_wavx,&peep_codec_wavc,NULL};
+  Map mp;if(!map_open(&mp,path))return 0;
+  if(is_wav&&wav_is_float(mp.p,mp.n)){map_close(&mp);return 0;}
+  peep pk;memset(&pk,0,sizeof pk);void*work=NULL;
+  int ok=peep_open(&pk,codecs,mp.p,mp.n,NULL,0);
+  if(!ok&&pk.work_need&&pk.work_need<=(size_t)64<<20){work=calloc(1,pk.work_need);if(work){size_t need=pk.work_need;memset(&pk,0,sizeof pk);ok=peep_open(&pk,codecs,mp.p,mp.n,work,need);}}
+  if(!ok){free(work);map_close(&mp);return 0;}
+  // Built-in 16-bit WAV comes out as stereo only; with more channels the surround fold-down needs the file's own channels, so the other decoder takes it.
+  if(pk.kind==1&&pk.channels>2){peep_close(&pk);free(work);map_close(&mp);return 0;}
+  ST.pk=pk;ST.mp=mp;ST.work=work;ST.pc=pk.kind==2?pk.codec:NULL;ST.fpos=0;ST.rel=0;
+  peep_set_gain(&ST.pk,256);peep_set_dither(&ST.pk,0);
+  ST.kind=ST_PEEP;ST.ch=ST.pc?(int)pk.channels:2;*rate=(int)pk.rate;return 1;
+}
 static int st_open(const char*path,char*err,int errn){
   const char*e=strrchr(path,'.');char x[8]={0};int i,rate=0;if(e)for(i=0;e[i+1]&&i<6;i++)x[i]=(char)tolower((unsigned char)e[i+1]);
   st_close();
-  if(!strcmp(x,"mp3")){if(drmp3_init_file(&ST.m,path,NULL)){ST.kind=ST_MP3;ST.ch=ST.m.channels;rate=ST.m.sampleRate;}}
+  if(!strcmp(x,"wav")||!strcmp(x,"flac"))st_open_peep(path,!strcmp(x,"wav"),&rate);
+  if(ST.kind==ST_PEEP){}
+  else if(!strcmp(x,"mp3")){if(drmp3_init_file(&ST.m,path,NULL)){ST.kind=ST_MP3;ST.ch=ST.m.channels;rate=ST.m.sampleRate;}}
   else if(!strcmp(x,"wav")){if(drwav_init_file(&ST.w,path,NULL)){ST.kind=ST_WAV;ST.ch=ST.w.channels;rate=ST.w.sampleRate;}}
   else if(!strcmp(x,"flac")){if((ST.f=drflac_open_file(path,NULL))){ST.kind=ST_FLAC;ST.ch=ST.f->channels;rate=ST.f->sampleRate;}}
   else if(!strcmp(x,"ogg")){int er=0;if((ST.v=stb_vorbis_open_filename(path,&er,NULL))){stb_vorbis_info in=stb_vorbis_get_info(ST.v);ST.kind=ST_OGG;ST.ch=2;rate=(int)in.sample_rate;}}   /* stb_vorbis mixes any channel layout down to 2 */
@@ -261,6 +336,7 @@ static int st_open(const char*path,char*err,int errn){
 }
 static void st_rewind(void){
   if(ST.kind==ST_MP3)drmp3_seek_to_pcm_frame(&ST.m,0);else if(ST.kind==ST_WAV)drwav_seek_to_pcm_frame(&ST.w,0);else if(ST.kind==ST_FLAC)drflac_seek_to_pcm_frame(ST.f,0);else if(ST.kind==ST_OGG)stb_vorbis_seek_start(ST.v);
+  else if(ST.kind==ST_PEEP){peep_seek(&ST.pk,0);ST.fpos=0;ST.rel=0;}
   ST.tail=0;}
 // Decodes one block and returns resampled stereo frames in out (up to cap; cap must be at least 4096*2+64), 0 at the end of the file.
 static int st_read(float*out,int cap){
@@ -270,6 +346,15 @@ static int st_read(float*out,int cap){
     else if(ST.kind==ST_WAV)n=(int)drwav_read_pcm_frames_f32(&ST.w,nin,raw);
     else if(ST.kind==ST_FLAC)n=(int)drflac_read_pcm_frames_f32(ST.f,nin,raw);
     else if(ST.kind==ST_OGG){n=stb_vorbis_get_samples_float_interleaved(ST.v,2,raw,nin*2);if(n<0)n=0;}
+    else if(ST.kind==ST_PEEP){   // full-resolution int32 (left-justified), scaled to float: exact for 16 and 24 bit, as the other decoders do
+      static int32_t ib[4096*8];size_t g;
+      if(ST.pc){g=ST.pc->read32?ST.pc->read32(&ST.pk,ib,(size_t)nin):0;
+        if(!ST.pc->read32){static int16_t sb[4096*8];g=ST.pc->read(&ST.pk,sb,(size_t)nin);int q;for(q=0;q<(int)g*ch;q++)ib[q]=(int32_t)((uint32_t)(uint16_t)sb[q]<<16);}}
+      else g=peep_fill32(&ST.pk,ib,(size_t)nin);
+      n=(int)g;{int q;for(q=0;q<n*ch;q++)raw[q]=(float)ib[q]*(1.0f/2147483648.0f);}
+      ST.fpos+=(unsigned long long)n;
+      if(ST.pk.total&&ST.mp.n>(32u<<20)){unsigned long long est=(unsigned long long)((double)ST.mp.n*((double)ST.fpos/(double)ST.pk.total));   // a long file: hand back what has been played, keeping 16 MB behind
+        if(est>(24u<<20)&&est-(16u<<20)>ST.rel+(8u<<20)){ST.rel=est-(16u<<20);map_release(&ST.mp,(size_t)ST.rel);}}}
     if(n<=0){   // end of file: push the resampler's last half-window of silence through once, so the very end is not cut off
       if(ST.rs.pass||ST.tail)return 0;ST.tail=1;memset(st2,0,sizeof(float)*2*(RS_HALF+1));return rs_run(&ST.rs,st2,RS_HALF+1,out,cap);}
     for(i=0;i<n;i++){const float*q=raw+i*ch;float l,r;   // to stereo: mono is doubled; surround folds centre and rears in

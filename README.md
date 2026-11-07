@@ -51,23 +51,20 @@ No guarantee is made that all themes are safe for people who are sensitive to fl
 
 ## Build from source
 
-Everything is plain C in a single translation unit (`src/8tris.c` pulls in the rest).
+Everything is plain C in a single translation unit (`src/8tris.c` pulls in the rest), plus [Liberated Peep](third_party/peep) (`third_party/peep`), the WAV and FLAC decoder, which is assembly: it needs `nasm` on x86-64 (GNU `as` on ARM64) to build.
 
 ```sh
-# Linux: needs gcc and libsdl2-dev
-gcc -O2 -o 8tris src/plat_sdl.c -lSDL2 -lm -lpthread
-
-# Windows exe, cross-compiled: needs x86_64-w64-mingw32-gcc
-x86_64-w64-mingw32-windres icon.rc -O coff -o icon_res.o
-x86_64-w64-mingw32-gcc -O2 -static -mwindows -o 8tris.exe src/plat_win.c icon_res.o -lwinmm -lgdi32 -luser32 -lopengl32 -lm
+make            # Linux: needs gcc, libsdl2-dev and nasm; builds ./8tris
+make win        # Windows exe, cross-compiled: needs mingw-w64 and nasm; builds ./8tris.exe
+make peep       # only the decoder library, build/libpeep.a
 ```
 
 The AppImage's launcher (`appimage/launcher.c`, built static as `AppRun`) uses your system's SDL2 when it works and the bundled copy otherwise.
 
-`./8tris --selftest` plays a scripted game with the menu and effects, mixes audio and checks the result. The `test/` folder holds the scripted UI, scoring and rendering tests; each is a single `.c` file that includes the game (`gcc -O1 -o t test/click.c -lm`).
+`./8tris --selftest` plays a scripted game with the menu and effects, mixes audio and checks the result. The `test/` folder holds the scripted UI, scoring and rendering tests; each is a single `.c` file that includes the game; link it with the decoder library (`make peep`, then `gcc -O1 -o t test/click.c build/libpeep.a -lm -lpthread`). `test/peep_codec.c` checks every WAV and FLAC format against the older decoders sample by sample (it needs ffmpeg to make its files).
 
 Sound is table-driven: to add a voice, add a row to `VOICES` in `src/audio.c`. To add a theme, add its bit to `AVAIL` in `src/look.c`.
 
 ## Fonts and licenses
 
-The program's text uses DejaVu Sans (free Bitstream Vera license). The preferences menu can also use Liberation, Carlito, Atkinson Hyperlegible and OpenDyslexic, bundled as Latin subsets under the SIL Open Font License. See `FONTS.txt`. `stb_truetype.h` is public domain. No license has been chosen yet for the 8tris code itself.
+The program's text uses DejaVu Sans (free Bitstream Vera license). The preferences menu can also use Liberation, Carlito, Atkinson Hyperlegible and OpenDyslexic, bundled as Latin subsets under the SIL Open Font License. See `FONTS.txt`. `stb_truetype.h` is public domain. The music decoders are Liberated Peep (WAV and FLAC, public domain), `dr_mp3`, `dr_flac`, `dr_wav` (public domain or MIT-0) and `stb_vorbis` (public domain). No license has been chosen yet for the 8tris code itself.

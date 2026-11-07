@@ -2,6 +2,12 @@
 
 Versions are `major.minor.patch`. Until about ten changes have built up, new features are shipped as patch releases, so a patch number here can include features. This file is the real record of what changed.
 
+## Unreleased
+- **WAV and FLAC now play through Liberated Peep**, a small decoder written in assembly (`third_party/peep`), instead of `dr_wav` and `dr_flac`. Every format that played before still plays, and the samples are identical to the old decoders' (checked sample by sample in `test/peep_codec.c`). One difference: ADPCM files that carry a `fact` chunk now end at their true length (the old decoder also played the padding of the last block).
+- The music file is mapped into memory instead of being read in pieces; only the part being played is loaded, and on Linux the part already played is given back, so a long file still uses little memory (a 55 MB WAV peaked at 30 MB resident in the test).
+- The old decoders stay as a fallback for what Peep does not take, so nothing stops working: float WAV (so peaks above full scale still reach the limiter), 32-bit FLAC, RF64 and W64 WAV, and plain 16-bit WAV with more than two channels (the surround fold-down needs the file's own channels). MP3 and Ogg still use `dr_mp3` and `stb_vorbis`.
+- Building now needs `nasm` (x86-64) or GNU `as` (ARM64) as well as gcc: use `make`. Not yet run: the Windows build and ARM64.
+
 ## 0.7.15
 - **Pause button for music.** An optional button (Preferences, Sound, Pause button) stops and restarts your music with a click, picking up exactly where it stopped. Put it next to the track name (the default) or in any corner or edge of the screen; it takes the track name's size and opacity, and shows a play triangle while paused.
 - **Any length of track, including audiobooks.** Music is now streamed from the file instead of being loaded whole: a three-hour file opens in a few milliseconds and memory use stays flat (about 2 MB for the music player). The 10-minute limit is gone. Tags are read from the start of the file only (and the old ID3v1 tag from its very end), so a long file is never pulled into memory.
